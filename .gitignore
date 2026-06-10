@@ -1,0 +1,20 @@
+# Build artefacts
+build/
+build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Compiled objects and binaries
+*.dll
+*.lib
+*.def.o
+*.o
+*.obj
+
+# LLM-specific files
+claude.md
+CLAUDE.md
+handover.md
+*.local.md

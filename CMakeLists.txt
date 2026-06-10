@@ -43,6 +43,7 @@ if(NOT MAGPIE_HOST_TESTS)
 
     set(SOURCES
         src/dllmain.cpp
+        src/Theme.cpp
         ${IMGUI_SOURCES}
     )
 

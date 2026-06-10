@@ -32,8 +32,8 @@ inline void PushWindowBorder() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, BORDER_SIZE);
 }
 inline void PopWindowBorder() {
-    ImGui::PopStyleVar(1);
     ImGui::PopStyleColor(1);
+    ImGui::PopStyleVar(1);
 }
 
 // Push green action-button colours. Call PopButton() after the button widget.

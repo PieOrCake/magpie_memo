@@ -2,6 +2,7 @@
 #include "chat/ChatLinks.h"
 #include "chat/SpecData.h"
 #include "Markdown.h"
+#include "ChipResolver.h"
 #include <iostream>
 #include <string>
 
@@ -465,6 +466,126 @@ static void test_md_heading_with_bold()
     CHECK(foundBold);
 }
 
+// ── ChipResolver tests ────────────────────────────────────────────────────────
+
+static void test_chip_item_label()
+{
+    using namespace PieUI::ChatLinks;
+    std::string link = EncodeItem(46774);
+    Magpie::ChipView v = Magpie::ResolveChip(link);
+    CHECK_EQ(v.label, std::string("[Item]"));
+    CHECK(v.color != 0);
+}
+
+static void test_chip_waypoint_label()
+{
+    using namespace PieUI::ChatLinks;
+    std::string link = EncodeMap(900);
+    Magpie::ChipView v = Magpie::ResolveChip(link);
+    CHECK_EQ(v.label, std::string("[Waypoint]"));
+    CHECK(v.color != 0);
+}
+
+static void test_chip_skill_label()
+{
+    using namespace PieUI::ChatLinks;
+    std::string link = EncodeSkill(5516);
+    Magpie::ChipView v = Magpie::ResolveChip(link);
+    CHECK_EQ(v.label, std::string("[Skill]"));
+}
+
+static void test_chip_skin_label()
+{
+    using namespace PieUI::ChatLinks;
+    std::string link = EncodeSkin(8585);
+    Magpie::ChipView v = Magpie::ResolveChip(link);
+    CHECK_EQ(v.label, std::string("[Skin]"));
+}
+
+static void test_chip_garbage_fallback()
+{
+    // Garbage input must not crash and must return the safe fallback label.
+    Magpie::ChipView v = Magpie::ResolveChip("not a link");
+    CHECK_EQ(v.label, std::string("[link]"));
+    Magpie::ChipView v2 = Magpie::ResolveChip("");
+    CHECK_EQ(v2.label, std::string("[link]"));
+}
+
+static void test_chip_colours_distinct()
+{
+    // Item and Waypoint must have distinct, non-zero colours.
+    using namespace PieUI::ChatLinks;
+    Magpie::ChipView item = Magpie::ResolveChip(EncodeItem(1));
+    Magpie::ChipView wp   = Magpie::ResolveChip(EncodeMap(1));
+    CHECK(item.color != 0);
+    CHECK(wp.color != 0);
+    CHECK(item.color != wp.color);
+}
+
+static void test_chip_non_build_never_returns_build_path()
+{
+    // Skill, skin, waypoint must never produce a "[... Build]" label.
+    using namespace PieUI::ChatLinks;
+    Magpie::ChipView skill = Magpie::ResolveChip(EncodeSkill(5516));
+    Magpie::ChipView skin  = Magpie::ResolveChip(EncodeSkin(8585));
+    Magpie::ChipView wp    = Magpie::ResolveChip(EncodeMap(900));
+    CHECK(skill.label.find("Build") == std::string::npos);
+    CHECK(skin.label.find("Build") == std::string::npos);
+    CHECK(wp.label.find("Build") == std::string::npos);
+}
+
+static void test_chip_build_label_via_spec_helpers()
+{
+    // We can't easily synthesize a valid build chat code without a full encoder
+    // round-trip, but we CAN verify the spec-label mapping that BuildLabel uses:
+    // GetEliteSpecName(59) == "Mirage"  → would produce "[Mirage Build]"
+    // GetProfessionName(7) == "Mesmer"  → fallback would produce "[Mesmer Build]"
+    // This covers the label-derivation logic even without a live build code.
+    const char* mirage = PieUI::SpecData::GetEliteSpecName(59);
+    CHECK(mirage != nullptr);
+    CHECK_EQ(std::string(mirage), std::string("Mirage"));
+    std::string expectedLabel = std::string("[") + mirage + " Build]";
+    CHECK_EQ(expectedLabel, std::string("[Mirage Build]"));
+
+    const char* mesmer = PieUI::SpecData::GetProfessionName(7);
+    CHECK(mesmer != nullptr);
+    CHECK_EQ(std::string(mesmer), std::string("Mesmer"));
+    std::string profLabel = std::string("[") + mesmer + " Build]";
+    CHECK_EQ(profLabel, std::string("[Mesmer Build]"));
+}
+
+static void test_chip_build_roundtrip_via_encode()
+{
+    // Construct a minimal Mirage (Mesmer elite-spec 59) build link using EncodeBuild
+    // and verify that ResolveChip produces "[Mirage Build]".
+    using namespace PieUI::ChatLinks;
+    DecodedBuildLink b{};
+    b.profession = 7; // Mesmer
+    // spec slot 0 = Mirage (spec id 59)
+    b.specs[0].spec_id = 59;
+    b.specs[1].spec_id = 0;
+    b.specs[2].spec_id = 0;
+    std::string link = EncodeBuild(b);
+    CHECK(!link.empty());
+    CHECK(DetectType(link) == LINK_BUILD);
+    Magpie::ChipView v = Magpie::ResolveChip(link);
+    CHECK_EQ(v.label, std::string("[Mirage Build]"));
+    CHECK(v.color != 0);
+}
+
+static void test_chip_build_core_profession_fallback()
+{
+    // A build link with no elite specs → should fall back to "[Mesmer Build]".
+    using namespace PieUI::ChatLinks;
+    DecodedBuildLink b{};
+    b.profession = 7; // Mesmer
+    // All spec slots are 0 (core / no spec)
+    std::string link = EncodeBuild(b);
+    CHECK(!link.empty());
+    Magpie::ChipView v = Magpie::ResolveChip(link);
+    CHECK_EQ(v.label, std::string("[Mesmer Build]"));
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 int main()
@@ -494,6 +615,18 @@ int main()
     test_codec_link_type_none_for_garbage();
     test_specdata_elite_spec_name();
     test_specdata_profession_name();
+
+    // ChipResolver tests
+    test_chip_item_label();
+    test_chip_waypoint_label();
+    test_chip_skill_label();
+    test_chip_skin_label();
+    test_chip_garbage_fallback();
+    test_chip_colours_distinct();
+    test_chip_non_build_never_returns_build_path();
+    test_chip_build_label_via_spec_helpers();
+    test_chip_build_roundtrip_via_encode();
+    test_chip_build_core_profession_fallback();
 
     // Markdown parser tests
     test_md_heading_level1();

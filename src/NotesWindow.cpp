@@ -66,11 +66,14 @@ void NotesWindow::advanceSelectionAfterDelete_(const std::string& deletedId)
         selectedId_.clear();
         return;
     }
-    // Try to keep the same index position; fall back to last note.
+    // The to-be-deleted note is still in the list at this point. Pick the
+    // successor if there is one, otherwise the predecessor, otherwise (it was
+    // the only note) clear the selection.
     for (size_t i = 0; i < notes.size(); ++i) {
         if (notes[i].id == deletedId) {
-            // This note hasn't been deleted yet — pick successor or predecessor.
-            selectedId_ = (i + 1 < notes.size()) ? notes[i + 1].id : notes[i - 1 < notes.size() ? i - 1 : 0].id;
+            if (i + 1 < notes.size())      selectedId_ = notes[i + 1].id;  // successor
+            else if (i > 0)                selectedId_ = notes[i - 1].id;  // predecessor
+            else                           selectedId_.clear();           // sole note
             return;
         }
     }

@@ -28,10 +28,14 @@ static inline bool IsNewlineCell(const ChipCell& c) { return !c.isChip && c.cp =
 
 static int   ChipTE_StringLen(ChipTextEdit* o)            { return (int)o->cells.size(); }
 static int   ChipTE_GetChar(ChipTextEdit* o, int i)       { return o->cells[i].isChip ? 0xFFFC : (int)o->cells[i].cp; }
-static float ChipTE_GetWidth(ChipTextEdit* o, int /*ls*/, int i) {
+static float ChipTE_GetWidth(ChipTextEdit* o, int ls, int i) {
+    // stb's GETWIDTH(obj, n, i) contract: `i` is the offset of the character RELATIVE to the
+    // row that starts at character `n` (=ls), so the absolute cell index is `ls + i`. (The
+    // single-line original ignored `ls` because its only row starts at 0; multi-line rows do not.)
     // -1.0f == STB_TEXTEDIT_GETWIDTH_NEWLINE (defined below); return the literal so we don't depend
     // on macro visibility order. stb compares the returned width against the sentinel.
-    return IsNewlineCell(o->cells[i]) ? -1.0f : o->cells[i].width;
+    const ChipCell& c = o->cells[ls + i];
+    return IsNewlineCell(c) ? -1.0f : c.width;
 }
 
 // Lay out ONE row beginning at cell `n`: sum the widths of this row's NON-newline cells, and count

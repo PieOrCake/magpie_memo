@@ -233,22 +233,24 @@ void NotesWindow::Render()
 
     const auto& notes = store_.Notes();
 
-    // ── Left pane ─────────────────────────────────────────────────────────
-    const float leftWidth = 200.0f;
+    // ── Left column: the note list with the "Create New Note" button directly
+    //    beneath it. Grouped so the right-hand panel (added with SameLine below)
+    //    sits beside the FULL height of this column — not squished under the
+    //    button at the bottom of the window. ─────────────────────────────────
+    const float leftWidth  = 200.0f;
+    const float createBtnH = ImGui::GetFrameHeightWithSpacing();
 
-    // Reserve space at the bottom for the Create button.
-    const float btnAreaHeight = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
-    ImVec2 leftPaneSize(leftWidth, ImGui::GetContentRegionAvail().y - btnAreaHeight);
+    ImGui::BeginGroup();
 
+    // The list fills the column's height minus the Create button row below it
+    // (negative height = fill available minus that many px).
     Theme::PushDarkFrameBg();
-    ImGui::BeginChild("##notes_list", leftPaneSize, true);
+    ImGui::BeginChild("##notes_list", ImVec2(leftWidth, -createBtnH), true);
     Theme::PopFrameBg();
 
-    // Capture a click here but defer the actual navigation until AFTER EndChild:
-    // OpenPopup() (inside requestSelect_) hashes its id against the current
-    // window, so it must run in the SAME window scope as the BeginPopupModal in
-    // renderUnsavedModal_ (the parent window) — not inside this child — or the
-    // unsaved-changes modal never opens.
+    // Capture a click here but defer the navigation until after the group:
+    // OpenPopup() (inside requestSelect_) must run in the parent-window scope so
+    // the unsaved-changes modal opens — never from inside the list child.
     std::string clickedId;
     for (const auto& note : notes) {
         bool selected = (note.id == selectedId_);
@@ -259,21 +261,23 @@ void NotesWindow::Render()
 
     ImGui::EndChild();
 
-    if (!clickedId.empty()) {
-        requestSelect_(clickedId);
-    }
-
-    // Create New Note button sits below the list.
+    // Create New Note button — immediately below the list, inside the column.
     Theme::PushGreenButton();
     if (ImGui::Button("Create New Note", ImVec2(leftWidth, 0))) {
         requestCreate_();
     }
     Theme::PopButton();
 
-    // ── Right pane ────────────────────────────────────────────────────────
+    ImGui::EndGroup();
+
+    if (!clickedId.empty()) {
+        requestSelect_(clickedId);
+    }
+
+    // ── Right panel: the note view/editor, beside the list at full height. ──
     ImGui::SameLine();
 
-    ImGui::BeginChild("##notes_detail", ImVec2(0, 0), false);
+    ImGui::BeginChild("##notes_detail", ImVec2(0, 0), true);
 
     Magpie::Note* note = selectedId_.empty() ? nullptr : store_.Get(selectedId_);
 

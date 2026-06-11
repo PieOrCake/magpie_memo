@@ -9,6 +9,8 @@
 #include "imgui.h"
 #include "imgui_stdlib.h"
 #include "Theme.h"
+#include "Markdown.h"
+#include "MarkdownRender.h"
 
 namespace fs = std::filesystem;
 
@@ -16,6 +18,8 @@ namespace fs = std::filesystem;
 
 void NotesWindow::Init(AddonAPI_t* api)
 {
+    api_ = api;
+
     const char* dir = api->Paths_GetAddonDirectory("Magpie Memo");
     if (dir && dir[0] != '\0') {
         fs::path addonDir(dir);
@@ -362,17 +366,19 @@ void NotesWindow::Render()
         ImGui::Separator();
 
         if (note != nullptr) {
-            // Read-only body; InputTextMultiline gives a scrollable view.
-            ImVec2 bodySize(ImGui::GetContentRegionAvail().x,
-                            ImGui::GetContentRegionAvail().y);
-            Theme::PushDarkFrameBg();
-            ImGui::InputTextMultiline(
-                "##body",
-                const_cast<char*>(note->body.c_str()),
-                note->body.size() + 1,
-                bodySize,
-                ImGuiInputTextFlags_ReadOnly);
-            Theme::PopFrameBg();
+            // Rendered markdown preview inside a scrollable child so long
+            // notes scroll. EDIT mode shows the raw source; VIEW shows this.
+            ImFont* fontBig = nullptr;
+            if (api_ != nullptr) {
+                auto* nl = static_cast<NexusLinkData_t*>(
+                    api_->DataLink_Get(DL_NEXUS_LINK));
+                if (nl != nullptr) fontBig = static_cast<ImFont*>(nl->FontBig);
+            }
+
+            ImGui::BeginChild("##view_body", ImVec2(0, 0), false);
+            const std::vector<Magpie::Md::Line> lines = Magpie::Md::Parse(note->body);
+            Magpie::RenderMarkdown(lines, fontBig, ImGui::GetContentRegionAvail().x);
+            ImGui::EndChild();
         }
     }
 

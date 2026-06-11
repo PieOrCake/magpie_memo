@@ -50,6 +50,7 @@ if(NOT MAGPIE_HOST_TESTS)
         src/NotesStore.cpp
         src/NotesWindow.cpp
         src/Markdown.cpp
+        src/MarkdownRender.cpp
         src/chat/ChatLinks.cpp
         ${IMGUI_SOURCES}
     )

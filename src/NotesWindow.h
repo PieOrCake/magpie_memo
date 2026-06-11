@@ -18,6 +18,7 @@ private:
     enum class Mode { View, Edit };
 
     // ── Persistent state ──────────────────────────────────────────────────
+    AddonAPI_t*           api_ = nullptr;  // Nexus API (for FontBig via DataLink)
     Magpie::NotesStore    store_;
     std::string           selectedId_;
     std::filesystem::path notesFile_;

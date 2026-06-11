@@ -9,6 +9,7 @@
 #include "Theme.h"
 #include "NotesWindow.h"
 #include "DecoderClient.h"
+#include "IconCache.h"
 
 // ── Version constants ─────────────────────────────────────────────────────
 #define V_MAJOR    0
@@ -83,6 +84,9 @@ void AddonLoad(AddonAPI_t* aApi) {
     // Initialise notes store (loads from disk).
     g_Notes.Init(APIDefs);
 
+    // Icon cache (async chip-icon download/upload via Nexus textures).
+    Magpie::Icons::Init(APIDefs);
+
     // Decoder Ring consumer client (optional provider; lifetime-contract safe).
     Magpie::Decoder::Init(APIDefs);
 
@@ -123,7 +127,17 @@ void AddonRender() {
 
 // ── AddonOptions ──────────────────────────────────────────────────────────
 void AddonOptions() {
-    ImGui::TextDisabled("Magpie Memo options will appear here.");
+    // Live Decoder Ring presence — re-evaluated every frame, never latched.
+    // Drives the chip experience: full names + icons + tooltips when present,
+    // basic labels (still fully usable) when absent.
+    if (Magpie::Decoder::Present()) {
+        ImGui::TextColored(ImVec4(0.50f, 0.85f, 0.50f, 1.0f),
+            "Decoder Ring: connected -- chips show full names and icons.");
+    } else {
+        ImGui::TextColored(ImVec4(0.85f, 0.78f, 0.45f, 1.0f),
+            "Decoder Ring not loaded -- chips show basic labels.");
+        ImGui::TextDisabled("Copy code and Open in wiki still work.");
+    }
 }
 
 // ── ProcessKeybind ────────────────────────────────────────────────────────

@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "imgui.h"
+#include "ChipRich.h"   // Magpie::DrawRichChip / MeasureRichChip (Task 13)
 
 namespace Magpie {
 
@@ -89,30 +90,6 @@ void DrawWord(ImDrawList* dl, ImFont* font, float fontSize,
     dl->AddText(font, fontSize, pos, col, text);
 }
 
-// Draw a chip placeholder token at `pos`. Returns its total advance width.
-// Factored out so Task 13 can swap in a resolved icon+name token using the
-// same pen-position contract (takes pen pos, returns consumed width).
-float DrawChip(ImDrawList* dl, ImFont* font, float fontSize,
-               const ImVec2& pos, const std::string& /*code*/)
-{
-    // Placeholder label — Task 13 replaces with the resolved name.
-    const char* label = "[link]";
-    const ImVec2 textSize = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, label);
-
-    const float padX = 4.0f;
-    const float padY = 1.0f;
-    const ImVec2 rMin(pos.x, pos.y - padY);
-    const ImVec2 rMax(pos.x + textSize.x + padX * 2.0f, pos.y + fontSize + padY);
-
-    // Faint blue/gold tint behind a bracketed label.
-    const ImU32 bgCol     = IM_COL32(70, 90, 150, 90);
-    const ImU32 labelCol  = IM_COL32(210, 220, 255, 255);
-    dl->AddRectFilled(rMin, rMax, bgCol, 3.0f);
-    dl->AddText(font, fontSize, ImVec2(pos.x + padX, pos.y), labelCol, label);
-
-    return textSize.x + padX * 2.0f;
-}
-
 } // namespace
 
 void RenderMarkdown(const std::vector<Md::Line>& lines, ImFont* fontBig, float wrapWidth)
@@ -129,6 +106,9 @@ void RenderMarkdown(const std::vector<Md::Line>& lines, ImFont* fontBig, float w
     float penY = origin.y;
     float maxPenY = origin.y;
     float lastLineHeight = ImGui::GetFont()->FontSize + kLeading;
+
+    // Running per-chip id so each chip's right-click popup has a unique scope.
+    int chipUid = 0;
 
     for (const Md::Line& line : lines) {
         // Choose active font.
@@ -155,15 +135,15 @@ void RenderMarkdown(const std::vector<Md::Line>& lines, ImFont* fontBig, float w
         // Lay out spans.
         for (const Md::Span& span : line.spans) {
             if (span.kind == Md::Inline::Chip) {
-                // Measure chip width first so we can wrap before it if needed.
-                const char* label = "[link]";
-                const float chipW =
-                    font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, label).x + 8.0f;
+                // Measure chip width first (same computation DrawRichChip uses)
+                // so the wrap decision matches the draw.
+                const float chipW = MeasureRichChip(font, fontSize, span.text);
                 if (penX + chipW > rightEdge && penX > startX) {
                     penX = startX;
                     penY += lineHeight;
                 }
-                const float w = DrawChip(dl, font, fontSize, ImVec2(penX, penY), span.text);
+                const float w = DrawRichChip(dl, font, fontSize, ImVec2(penX, penY),
+                                             span.text, chipUid++);
                 penX += w;
                 continue;
             }

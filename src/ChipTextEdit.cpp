@@ -1,5 +1,6 @@
 #include "ChipTextEdit.h"
 #include "ChipResolver.h"      // Magpie::ResolveChip (replaces Pie UI's RichLineResolveChip)
+#include "ChipRich.h"          // Magpie::ChipLabel (resolved name when Decoder Ring is warm)
 #include "ChipCodec.h"         // pure text<->cell model + UTF-8 helpers
 #include "chat/ChatLinks.h"    // SegmentLine (paste: parse [&..] into chips)
 #include <algorithm>
@@ -142,9 +143,11 @@ static void Measure(std::vector<ChipCell>& cells) {
     const float scale = ImGui::GetFontSize() / font->FontSize;
     for (auto& c : cells) {
         if (c.isChip) {
-            ChipView v = Magpie::ResolveChip(c.code);
-            std::string name = v.label.empty() ? (c.name.empty() ? "[link]" : c.name) : v.label;
-            c.name = name; c.color = v.color;
+            // Resolved name from Decoder Ring when warm; structural label otherwise
+            // (ChipLabel handles the fallback and never returns empty). Colour stays
+            // structural so the chip tint is stable regardless of resolution.
+            std::string name = Magpie::ChipLabel(c.code);
+            c.name = name; c.color = Magpie::ResolveChip(c.code).color;
             c.width = ImGui::CalcTextSize(name.c_str()).x + 6.0f;   // small side padding
         } else if (IsNewlineCell(c)) {
             c.width = 0.0f;   // visual width; the GETWIDTH sentinel is handled in ChipTE_GetWidth

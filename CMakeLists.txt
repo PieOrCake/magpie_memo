@@ -45,6 +45,7 @@ if(NOT MAGPIE_HOST_TESTS)
         src/dllmain.cpp
         src/Theme.cpp
         src/NotesStore.cpp
+        src/NotesWindow.cpp
         ${IMGUI_SOURCES}
     )
 

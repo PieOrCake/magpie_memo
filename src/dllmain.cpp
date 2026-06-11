@@ -1,5 +1,5 @@
-// dllmain.cpp — Magpie Memo Nexus addon lifecycle skeleton.
-// Stage 1: lifecycle registration, empty themed window, options placeholder.
+// dllmain.cpp — Magpie Memo Nexus addon lifecycle.
+// Stage 2: two-pane notes shell + JSON persistence.
 
 #include <windows.h>
 #include <cstring>
@@ -7,6 +7,7 @@
 #include "nexus/Nexus.h"
 #include "imgui.h"
 #include "Theme.h"
+#include "NotesWindow.h"
 
 // ── Version constants ─────────────────────────────────────────────────────
 #define V_MAJOR    0
@@ -17,6 +18,7 @@
 // ── Globals ───────────────────────────────────────────────────────────────
 AddonAPI_t*      APIDefs         = nullptr;
 bool             g_WindowVisible = false;
+NotesWindow      g_Notes;
 
 // ── Forward declarations ──────────────────────────────────────────────────
 void AddonLoad(AddonAPI_t* aApi);
@@ -73,6 +75,9 @@ void AddonLoad(AddonAPI_t* aApi) {
     // Close window on Escape.
     APIDefs->GUI_RegisterCloseOnEscape("Magpie Memo", &g_WindowVisible);
 
+    // Initialise notes store (loads from disk).
+    g_Notes.Init(APIDefs);
+
     // TODO: QuickAccess icon (needs an embedded icon asset)
 
     APIDefs->Log(LOGL_INFO, "MagpieMemo", "Magpie Memo loaded.");
@@ -80,6 +85,9 @@ void AddonLoad(AddonAPI_t* aApi) {
 
 // ── AddonUnload ───────────────────────────────────────────────────────────
 void AddonUnload() {
+    // Save notes before we lose APIDefs (Shutdown only writes to disk — safe).
+    g_Notes.Shutdown();
+
     APIDefs->GUI_DeregisterCloseOnEscape("Magpie Memo");
     APIDefs->InputBinds_Deregister("KB_MAGPIE_MEMO_TOGGLE");
     APIDefs->GUI_Deregister(AddonOptions);
@@ -95,7 +103,7 @@ void AddonRender() {
     Theme::PushWindowBorder();
 
     if (ImGui::Begin("Magpie Memo", &g_WindowVisible)) {
-        ImGui::TextDisabled("[ Magpie Memo - notes go here ]");
+        g_Notes.Render();
     }
     ImGui::End();
 

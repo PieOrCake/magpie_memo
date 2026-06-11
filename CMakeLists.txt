@@ -53,6 +53,8 @@ if(NOT MAGPIE_HOST_TESTS)
         src/MarkdownRender.cpp
         src/chat/ChatLinks.cpp
         src/ChipResolver.cpp
+        src/ChipCodec.cpp
+        src/ChipTextEdit.cpp
         ${IMGUI_SOURCES}
     )
 
@@ -81,6 +83,7 @@ else()
         src/Markdown.cpp
         src/chat/ChatLinks.cpp
         src/ChipResolver.cpp
+        src/ChipCodec.cpp
     )
 
     add_executable(magpie_host_tests ${HOST_TEST_SOURCES})

@@ -3,6 +3,7 @@
 #include "chat/SpecData.h"
 #include "Markdown.h"
 #include "ChipResolver.h"
+#include "ChipCodec.h"
 #include <iostream>
 #include <string>
 
@@ -586,6 +587,57 @@ static void test_chip_build_core_profession_fallback()
     CHECK_EQ(v.label, std::string("[Mesmer Build]"));
 }
 
+// ── ChipCodec round-trip tests ────────────────────────────────────────────────
+
+static void test_chipcodec_roundtrip_plain()
+{
+    std::string s = "hello world";
+    CHECK_EQ(Magpie::CellsToText(Magpie::ParseToCells(s)), s);
+}
+
+static void test_chipcodec_roundtrip_with_chip()
+{
+    using namespace PieUI::ChatLinks;
+    std::string code = EncodeItem(19684 /* Copper Ore */, 1);
+    CHECK(!code.empty());
+    std::string s = "got " + code + " here";
+    auto cells = Magpie::ParseToCells(s);
+    CHECK_EQ(Magpie::CellsToText(cells), s);
+    // The chip is exactly ONE cell, isChip, code == the embedded code.
+    int chipCount = 0; std::string chipCode;
+    for (const auto& c : cells) if (c.isChip) { ++chipCount; chipCode = c.code; }
+    CHECK(chipCount == 1);
+    CHECK_EQ(chipCode, code);
+}
+
+static void test_chipcodec_roundtrip_multiline()
+{
+    std::string s = "line one\nline two\nthird";
+    auto cells = Magpie::ParseToCells(s);
+    CHECK_EQ(Magpie::CellsToText(cells), s);
+    // A '\n' becomes a text cell with cp == '\n'.
+    int nlCount = 0;
+    for (const auto& c : cells) if (!c.isChip && c.cp == '\n') ++nlCount;
+    CHECK(nlCount == 2);
+}
+
+static void test_chipcodec_roundtrip_mixed()
+{
+    using namespace PieUI::ChatLinks;
+    std::string code = EncodeItem(19684, 1);
+    CHECK(!code.empty());
+    std::string s = "top " + code + "\nmid line\n" + code + " end";
+    auto cells = Magpie::ParseToCells(s);
+    CHECK_EQ(Magpie::CellsToText(cells), s);
+    int chipCount = 0, nlCount = 0;
+    for (const auto& c : cells) {
+        if (c.isChip) ++chipCount;
+        else if (c.cp == '\n') ++nlCount;
+    }
+    CHECK(chipCount == 2);
+    CHECK(nlCount == 2);
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 int main()
@@ -627,6 +679,12 @@ int main()
     test_chip_build_label_via_spec_helpers();
     test_chip_build_roundtrip_via_encode();
     test_chip_build_core_profession_fallback();
+
+    // ChipCodec round-trip tests
+    test_chipcodec_roundtrip_plain();
+    test_chipcodec_roundtrip_with_chip();
+    test_chipcodec_roundtrip_multiline();
+    test_chipcodec_roundtrip_mixed();
 
     // Markdown parser tests
     test_md_heading_level1();

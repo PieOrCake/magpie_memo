@@ -1,4 +1,6 @@
 #include "NotesStore.h"
+#include "chat/ChatLinks.h"
+#include "chat/SpecData.h"
 #include <iostream>
 #include <string>
 
@@ -185,6 +187,111 @@ static void test_create_after_fromjson_has_unique_id()
     CHECK(store.Notes().size() == 3);
 }
 
+// ── ChatLinks codec tests ─────────────────────────────────────────────────────
+
+static void test_codec_encode_item_roundtrip()
+{
+    using namespace PieUI::ChatLinks;
+    std::string link = EncodeItem(46774);
+    CHECK(!link.empty());
+    CHECK(DetectType(link) == LINK_ITEM);
+    CHECK_EQ(std::string(LinkTypeLabel(LINK_ITEM)), std::string("[Item]"));
+}
+
+static void test_codec_encode_map_roundtrip()
+{
+    using namespace PieUI::ChatLinks;
+    std::string link = EncodeMap(900); // arbitrary PoI id
+    CHECK(!link.empty());
+    CHECK(DetectType(link) == LINK_MAP);
+    CHECK_EQ(std::string(LinkTypeLabel(LINK_MAP)), std::string("[Waypoint]"));
+}
+
+static void test_codec_encode_skill_roundtrip()
+{
+    using namespace PieUI::ChatLinks;
+    std::string link = EncodeSkill(5516);
+    CHECK(!link.empty());
+    CHECK(DetectType(link) == LINK_SKILL);
+    CHECK_EQ(std::string(LinkTypeLabel(LINK_SKILL)), std::string("[Skill]"));
+}
+
+static void test_codec_encode_skin_roundtrip()
+{
+    using namespace PieUI::ChatLinks;
+    std::string link = EncodeSkin(8585);
+    CHECK(!link.empty());
+    CHECK(DetectType(link) == LINK_SKIN);
+    CHECK_EQ(std::string(LinkTypeLabel(LINK_SKIN)), std::string("[Skin]"));
+}
+
+static void test_codec_segment_line_plain_and_link()
+{
+    using namespace PieUI::ChatLinks;
+    // Build an item link and embed it in a text line
+    std::string itemLink = EncodeItem(46774);
+    std::string line = "Check out " + itemLink + " here";
+    auto segs = SegmentLine(line);
+    // Expect at least 3 segments: plain, link, plain
+    CHECK(segs.size() >= 3);
+    // Find the link segment
+    bool foundLink = false;
+    for (const auto& s : segs) {
+        if (s.kind == SegmentKind::Link) {
+            CHECK(s.linkType == LINK_ITEM);
+            CHECK_EQ(s.raw, itemLink);
+            foundLink = true;
+        }
+    }
+    CHECK(foundLink);
+}
+
+static void test_codec_segment_line_plain_only()
+{
+    using namespace PieUI::ChatLinks;
+    auto segs = SegmentLine("just plain text");
+    CHECK(segs.size() == 1);
+    CHECK(segs[0].kind == SegmentKind::Plain);
+    CHECK_EQ(segs[0].display, std::string("just plain text"));
+}
+
+static void test_codec_link_type_none_for_garbage()
+{
+    using namespace PieUI::ChatLinks;
+    CHECK(DetectType("not a link") == LINK_NONE);
+    CHECK(DetectType("") == LINK_NONE);
+}
+
+static void test_specdata_elite_spec_name()
+{
+    using namespace PieUI::SpecData;
+    // Known HoT elite specs
+    CHECK_EQ(std::string(GetEliteSpecName(5)),  std::string("Druid"));
+    CHECK_EQ(std::string(GetEliteSpecName(7)),  std::string("Daredevil"));
+    CHECK_EQ(std::string(GetEliteSpecName(40)), std::string("Chronomancer"));
+    // Known PoF elite specs
+    CHECK_EQ(std::string(GetEliteSpecName(59)), std::string("Mirage"));
+    CHECK_EQ(std::string(GetEliteSpecName(62)), std::string("Firebrand"));
+    // Known EoD elite specs
+    CHECK_EQ(std::string(GetEliteSpecName(70)), std::string("Mechanist"));
+    CHECK_EQ(std::string(GetEliteSpecName(72)), std::string("Untamed"));
+    // Unknown returns nullptr
+    CHECK(GetEliteSpecName(0) == nullptr);
+    CHECK(GetEliteSpecName(999) == nullptr);
+}
+
+static void test_specdata_profession_name()
+{
+    using namespace PieUI::SpecData;
+    CHECK_EQ(std::string(GetProfessionName(1)), std::string("Guardian"));
+    CHECK_EQ(std::string(GetProfessionName(2)), std::string("Warrior"));
+    CHECK_EQ(std::string(GetProfessionName(7)), std::string("Mesmer"));
+    CHECK_EQ(std::string(GetProfessionName(9)), std::string("Revenant"));
+    // Unknown returns empty string (not nullptr)
+    CHECK_EQ(std::string(GetProfessionName(0)),   std::string(""));
+    CHECK_EQ(std::string(GetProfessionName(99)),  std::string(""));
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 int main()
@@ -203,6 +310,17 @@ int main()
     test_fromjson_wrong_shape_returns_false();
     test_fromjson_empty_array();
     test_create_after_fromjson_has_unique_id();
+
+    // ChatLinks codec tests
+    test_codec_encode_item_roundtrip();
+    test_codec_encode_map_roundtrip();
+    test_codec_encode_skill_roundtrip();
+    test_codec_encode_skin_roundtrip();
+    test_codec_segment_line_plain_and_link();
+    test_codec_segment_line_plain_only();
+    test_codec_link_type_none_for_garbage();
+    test_specdata_elite_spec_name();
+    test_specdata_profession_name();
 
     if (s_failures == 0) {
         std::cout << "ALL PASS\n";

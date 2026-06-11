@@ -34,6 +34,7 @@ if(NOT MAGPIE_HOST_TESTS)
     include_directories(${CMAKE_SOURCE_DIR}/lib/imgui/backends)
     include_directories(${CMAKE_SOURCE_DIR}/lib/imgui/misc/cpp)
     include_directories(${CMAKE_SOURCE_DIR}/public)
+    include_directories(${CMAKE_SOURCE_DIR}/src)
 
     set(IMGUI_SOURCES
         lib/imgui/imgui.cpp
@@ -48,6 +49,7 @@ if(NOT MAGPIE_HOST_TESTS)
         src/Theme.cpp
         src/NotesStore.cpp
         src/NotesWindow.cpp
+        src/chat/ChatLinks.cpp
         ${IMGUI_SOURCES}
     )
 
@@ -73,6 +75,7 @@ else()
     set(HOST_TEST_SOURCES
         tests/host_tests_main.cpp
         src/NotesStore.cpp
+        src/chat/ChatLinks.cpp
     )
 
     add_executable(magpie_host_tests ${HOST_TEST_SOURCES})

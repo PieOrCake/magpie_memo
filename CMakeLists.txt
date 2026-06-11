@@ -44,6 +44,7 @@ if(NOT MAGPIE_HOST_TESTS)
     set(SOURCES
         src/dllmain.cpp
         src/Theme.cpp
+        src/NotesStore.cpp
         ${IMGUI_SOURCES}
     )
 
@@ -68,9 +69,15 @@ else()
 
     set(HOST_TEST_SOURCES
         tests/host_tests_main.cpp
+        src/NotesStore.cpp
     )
 
     add_executable(magpie_host_tests ${HOST_TEST_SOURCES})
+
+    target_include_directories(magpie_host_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/src
+    )
 
     set_target_properties(magpie_host_tests PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}

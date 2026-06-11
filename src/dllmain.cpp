@@ -100,6 +100,9 @@ void AddonUnload() {
     // Drop Decoder Ring subscriptions + cache before APIDefs goes away.
     Magpie::Decoder::Shutdown();
 
+    // Mark the icon cache dead so a late texture-load callback can't touch torn-down state.
+    Magpie::Icons::Shutdown();
+
     // Save notes before we lose APIDefs (Shutdown only writes to disk — safe).
     g_Notes.Shutdown();
 

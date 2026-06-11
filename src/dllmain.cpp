@@ -3,13 +3,22 @@
 
 #include <windows.h>
 #include <cstring>
+#include <string>
+#include <fstream>
+#include <filesystem>
 
 #include "nexus/Nexus.h"
 #include "imgui.h"
+#include <nlohmann/json.hpp>
 #include "Theme.h"
 #include "NotesWindow.h"
 #include "DecoderClient.h"
 #include "IconCache.h"
+#include "EmbeddedIcon.h"   // MAGPIE_ICON[] + MAGPIE_ICON_size (generated from icon.png)
+
+// ── Quick-access identifiers ──────────────────────────────────────────────
+#define QA_ID    "QA_MAGPIE_MEMO"
+#define TEX_ICON "TEX_MAGPIE_MEMO_ICON"
 
 // ── Version constants ─────────────────────────────────────────────────────
 #define V_MAJOR    0
@@ -20,6 +29,8 @@
 // ── Globals ───────────────────────────────────────────────────────────────
 AddonAPI_t*      APIDefs         = nullptr;
 bool             g_WindowVisible = false;
+bool             g_ShowQAIcon    = true;   // show the quick-access icon (persisted; default on)
+bool             g_QAIconAdded   = false;  // tracks whether the shortcut is currently registered
 NotesWindow      g_Notes;
 
 // ── Forward declarations ──────────────────────────────────────────────────
@@ -28,6 +39,50 @@ void AddonUnload();
 void ProcessKeybind(const char* aIdentifier, bool aIsRelease);
 void AddonRender();
 void AddonOptions();
+
+// ── Settings persistence (settings.json in the addon data dir) ────────────
+static std::string SettingsPath() {
+    if (!APIDefs) return std::string();
+    const char* dir = APIDefs->Paths_GetAddonDirectory("Magpie Memo");
+    if (!dir || !*dir) return std::string();
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    return (std::filesystem::path(dir) / "settings.json").string();
+}
+
+static void SaveSettings() {
+    const std::string path = SettingsPath();
+    if (path.empty()) return;
+    nlohmann::json j;
+    j["show_qa_icon"] = g_ShowQAIcon;
+    std::ofstream f(path, std::ios::out | std::ios::trunc);
+    if (f.is_open()) f << j.dump(2);
+}
+
+static void LoadSettings() {
+    const std::string path = SettingsPath();
+    if (path.empty()) return;
+    std::ifstream f(path);
+    if (!f.is_open()) return;
+    nlohmann::json j;
+    try { j = nlohmann::json::parse(f); }
+    catch (...) { return; }   // malformed: keep defaults
+    if (j.contains("show_qa_icon") && j["show_qa_icon"].is_boolean())
+        g_ShowQAIcon = j["show_qa_icon"].get<bool>();
+}
+
+// Add/remove the quick-access shortcut, keeping g_QAIconAdded in sync. The icon
+// texture is loaded once at AddonLoad regardless; these only toggle the shortcut.
+static void AddQAIcon() {
+    if (!APIDefs || g_QAIconAdded) return;
+    APIDefs->QuickAccess_Add(QA_ID, TEX_ICON, TEX_ICON, "KB_MAGPIE_MEMO_TOGGLE", "Magpie Memo");
+    g_QAIconAdded = true;
+}
+static void RemoveQAIcon() {
+    if (!APIDefs || !g_QAIconAdded) return;
+    APIDefs->QuickAccess_Remove(QA_ID);
+    g_QAIconAdded = false;
+}
 
 // ── Static addon definition ───────────────────────────────────────────────
 static AddonDefinition_t AddonDef = {};
@@ -90,7 +145,11 @@ void AddonLoad(AddonAPI_t* aApi) {
     // Decoder Ring consumer client (optional provider; lifetime-contract safe).
     Magpie::Decoder::Init(APIDefs);
 
-    // TODO: QuickAccess icon (needs an embedded icon asset)
+    // Load persisted settings (e.g. the quick-access toggle), then register the
+    // quick-access icon from the embedded icon.png (same method as Alter Ego).
+    LoadSettings();
+    APIDefs->Textures_LoadFromMemory(TEX_ICON, (void*)MAGPIE_ICON, MAGPIE_ICON_size, nullptr);
+    if (g_ShowQAIcon) AddQAIcon();
 
     APIDefs->Log(LOGL_INFO, "MagpieMemo", "Magpie Memo loaded.");
 }
@@ -105,6 +164,9 @@ void AddonUnload() {
 
     // Save notes before we lose APIDefs (Shutdown only writes to disk — safe).
     g_Notes.Shutdown();
+
+    // Remove the quick-access shortcut if it was registered.
+    RemoveQAIcon();
 
     APIDefs->GUI_DeregisterCloseOnEscape("Magpie Memo");
     APIDefs->InputBinds_Deregister("KB_MAGPIE_MEMO_TOGGLE");
@@ -140,6 +202,15 @@ void AddonOptions() {
         ImGui::TextColored(ImVec4(0.85f, 0.78f, 0.45f, 1.0f),
             "Decoder Ring not loaded -- chips show basic labels.");
         ImGui::TextDisabled("Copy code and Open in wiki still work.");
+    }
+
+    ImGui::Separator();
+
+    // Quick-access icon toggle (persisted; default on).
+    if (ImGui::Checkbox("Show quick access icon", &g_ShowQAIcon)) {
+        if (g_ShowQAIcon) AddQAIcon();
+        else              RemoveQAIcon();
+        SaveSettings();
     }
 }
 

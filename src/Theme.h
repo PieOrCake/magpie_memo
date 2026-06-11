@@ -25,6 +25,10 @@ inline const ImVec4 BTN_AMBER_ACTIVE   = { 0.45f, 0.38f, 0.16f, 1.00f };
 // ── Dark frame background ─────────────────────────────────────────────────
 inline const ImVec4 FRAME_BG_DARK      = { 0.10f, 0.10f, 0.13f, 1.00f };
 
+// ── Edit-mode frame background (warmer, slightly blue-shifted) ────────────
+// Visually distinct from FRAME_BG_DARK so the user knows they are editing.
+inline const ImVec4 EDIT_BG            = { 0.08f, 0.11f, 0.20f, 1.00f };
+
 // ── Scoped helpers ────────────────────────────────────────────────────────
 // Push the gold window border style. Call PopWindowBorder() after ImGui::End().
 inline void PushWindowBorder() {
@@ -57,6 +61,10 @@ inline void PushAmberButton() {
 // Call PopFrameBg() after the widget.
 inline void PushDarkFrameBg() {
     ImGui::PushStyleColor(ImGuiCol_FrameBg, FRAME_BG_DARK);
+}
+// Push edit-mode frame background (blue-tinted dark). Call PopFrameBg() after.
+inline void PushEditBg() {
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, EDIT_BG);
 }
 inline void PopFrameBg() {
     ImGui::PopStyleColor(1);

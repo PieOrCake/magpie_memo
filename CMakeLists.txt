@@ -32,6 +32,7 @@ if(NOT MAGPIE_HOST_TESTS)
     include_directories(${CMAKE_SOURCE_DIR}/lib)
     include_directories(${CMAKE_SOURCE_DIR}/lib/imgui)
     include_directories(${CMAKE_SOURCE_DIR}/lib/imgui/backends)
+    include_directories(${CMAKE_SOURCE_DIR}/lib/imgui/misc/cpp)
     include_directories(${CMAKE_SOURCE_DIR}/public)
 
     set(IMGUI_SOURCES
@@ -39,6 +40,7 @@ if(NOT MAGPIE_HOST_TESTS)
         lib/imgui/imgui_draw.cpp
         lib/imgui/imgui_tables.cpp
         lib/imgui/imgui_widgets.cpp
+        lib/imgui/misc/cpp/imgui_stdlib.cpp
     )
 
     set(SOURCES

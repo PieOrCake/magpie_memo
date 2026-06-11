@@ -7,6 +7,7 @@
 #include <fstream>
 #include <sstream>
 #include "imgui.h"
+#include "imgui_stdlib.h"
 #include "Theme.h"
 
 namespace fs = std::filesystem;
@@ -73,7 +74,7 @@ void NotesWindow::advanceSelectionAfterDelete_(const std::string& deletedId)
         if (notes[i].id == deletedId) {
             if (i + 1 < notes.size())      selectedId_ = notes[i + 1].id;  // successor
             else if (i > 0)                selectedId_ = notes[i - 1].id;  // predecessor
-            else                           selectedId_.clear();           // sole note
+            else                           selectedId_.clear();             // sole note
             return;
         }
     }
@@ -81,10 +82,151 @@ void NotesWindow::advanceSelectionAfterDelete_(const std::string& deletedId)
     selectFirst_();
 }
 
+void NotesWindow::enterEdit_(Magpie::Note* note)
+{
+    if (!note) return;
+    editBuffer_  = note->body;
+    titleBuffer_ = note->title;
+    mode_ = Mode::Edit;
+}
+
+void NotesWindow::commitEdit_()
+{
+    Magpie::Note* note = selectedId_.empty() ? nullptr : store_.Get(selectedId_);
+    if (note) {
+        note->body  = editBuffer_;
+        note->title = titleBuffer_;
+        Save();
+    }
+    mode_ = Mode::View;
+    editBuffer_.clear();
+    titleBuffer_.clear();
+}
+
+void NotesWindow::cancelEdit_()
+{
+    mode_ = Mode::View;
+    editBuffer_.clear();
+    titleBuffer_.clear();
+}
+
+void NotesWindow::resolvePending_()
+{
+    if (pendingCreate_) {
+        pendingCreate_ = false;
+        pendingSelectId_.clear();
+        // Create the new note, select it, and open in Edit mode.
+        Magpie::Note& n = store_.Create("Untitled note");
+        selectedId_ = n.id;
+        Save();
+        enterEdit_(&n);
+    } else if (!pendingSelectId_.empty()) {
+        selectedId_ = pendingSelectId_;
+        pendingSelectId_.clear();
+        mode_ = Mode::View;
+        editBuffer_.clear();
+        titleBuffer_.clear();
+    }
+}
+
+void NotesWindow::requestSelect_(const std::string& id)
+{
+    if (id == selectedId_) return;  // no-op
+
+    bool dirty = (mode_ == Mode::Edit);
+    if (dirty) {
+        Magpie::Note* cur = store_.Get(selectedId_);
+        if (cur) {
+            dirty = (editBuffer_ != cur->body) || (titleBuffer_ != cur->title);
+        }
+    }
+
+    if (dirty) {
+        pendingSelectId_ = id;
+        pendingCreate_   = false;
+        ImGui::OpenPopup("Unsaved Changes");
+    } else {
+        selectedId_ = id;
+        mode_ = Mode::View;
+        editBuffer_.clear();
+        titleBuffer_.clear();
+    }
+}
+
+void NotesWindow::requestCreate_()
+{
+    bool dirty = (mode_ == Mode::Edit);
+    if (dirty) {
+        Magpie::Note* cur = store_.Get(selectedId_);
+        if (cur) {
+            dirty = (editBuffer_ != cur->body) || (titleBuffer_ != cur->title);
+        }
+    }
+
+    if (dirty) {
+        pendingCreate_   = true;
+        pendingSelectId_.clear();
+        ImGui::OpenPopup("Unsaved Changes");
+    } else {
+        Magpie::Note& n = store_.Create("Untitled note");
+        selectedId_ = n.id;
+        Save();
+        enterEdit_(&n);
+    }
+}
+
+// ── Unsaved-changes modal ─────────────────────────────────────────────────
+
+void NotesWindow::renderUnsavedModal_()
+{
+    // Centre the popup on screen.
+    ImVec2 display = ImGui::GetIO().DisplaySize;
+    ImVec2 centre  = ImVec2(display.x * 0.5f, display.y * 0.5f);
+    ImGui::SetNextWindowPos(centre, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    if (ImGui::BeginPopupModal("Unsaved Changes", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::Text("This note has unsaved changes.");
+        ImGui::Spacing();
+
+        Theme::PushGreenButton();
+        if (ImGui::Button("Save", ImVec2(80, 0))) {
+            commitEdit_();
+            ImGui::CloseCurrentPopup();
+            resolvePending_();
+        }
+        Theme::PopButton();
+
+        ImGui::SameLine();
+
+        Theme::PushAmberButton();
+        if (ImGui::Button("Discard", ImVec2(80, 0))) {
+            cancelEdit_();
+            ImGui::CloseCurrentPopup();
+            resolvePending_();
+        }
+        Theme::PopButton();
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Cancel", ImVec2(80, 0))) {
+            pendingSelectId_.clear();
+            pendingCreate_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+}
+
 // ── Render ────────────────────────────────────────────────────────────────
 
 void NotesWindow::Render()
 {
+    // Draw the modal first so it can open this frame if triggered below.
+    renderUnsavedModal_();
+
     const auto& notes = store_.Notes();
 
     // ── Left pane ─────────────────────────────────────────────────────────
@@ -101,7 +243,7 @@ void NotesWindow::Render()
     for (const auto& note : notes) {
         bool selected = (note.id == selectedId_);
         if (ImGui::Selectable(note.title.c_str(), selected)) {
-            selectedId_ = note.id;
+            requestSelect_(note.id);
         }
     }
 
@@ -110,9 +252,7 @@ void NotesWindow::Render()
     // Create New Note button sits below the list.
     Theme::PushGreenButton();
     if (ImGui::Button("Create New Note", ImVec2(leftWidth, 0))) {
-        Magpie::Note& n = store_.Create("Untitled note");
-        selectedId_ = n.id;
-        Save();
+        requestCreate_();
     }
     Theme::PopButton();
 
@@ -128,14 +268,80 @@ void NotesWindow::Render()
         ImGui::Spacing();
         ImGui::TextDisabled("Your nest is empty.");
         ImGui::TextDisabled("Tap 'Create New Note' to start collecting.");
-    } else {
-        // Title row with Delete button on the right.
-        ImGui::Text("%s", note->title.c_str());
+    } else if (mode_ == Mode::Edit) {
+        // ── Edit mode ──────────────────────────────────────────────────────
 
-        ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetStyle().ItemSpacing.x - 60.0f);
+        // Save / Cancel buttons at the top.
+        Theme::PushGreenButton();
+        if (ImGui::Button("Save", ImVec2(70, 0))) {
+            commitEdit_();
+        }
+        Theme::PopButton();
+
+        ImGui::SameLine();
+
+        Theme::PushAmberButton();
+        if (ImGui::Button("Cancel", ImVec2(70, 0))) {
+            cancelEdit_();
+        }
+        Theme::PopButton();
+
+        // Delete button on the far right, same row.
+        {
+            float avail = ImGui::GetContentRegionAvail().x;
+            ImGui::SameLine(ImGui::GetCursorPosX() + avail - 60.0f);
+        }
         Theme::PushAmberButton();
         if (ImGui::Button("Delete", ImVec2(60.0f, 0))) {
-            std::string idToDelete = note->id;           // copy before erase
+            std::string idToDelete = note->id;
+            cancelEdit_();
+            advanceSelectionAfterDelete_(idToDelete);
+            store_.Delete(idToDelete);
+            Save();
+            note = nullptr;
+        }
+        Theme::PopButton();
+
+        ImGui::Separator();
+
+        if (note != nullptr) {
+            // Editable title field.
+            Theme::PushEditBg();
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::InputText("##title", &titleBuffer_);
+            Theme::PopFrameBg();
+
+            ImGui::Spacing();
+
+            // Editable body.
+            ImVec2 bodySize(ImGui::GetContentRegionAvail().x,
+                            ImGui::GetContentRegionAvail().y);
+            Theme::PushEditBg();
+            ImGui::InputTextMultiline("##edit", &editBuffer_, bodySize);
+            Theme::PopFrameBg();
+        }
+    } else {
+        // ── View mode ──────────────────────────────────────────────────────
+
+        // Title row with Edit and Delete buttons on the right.
+        ImGui::Text("%s", note->title.c_str());
+
+        // Edit button right-aligned before Delete.
+        {
+            float avail = ImGui::GetContentRegionAvail().x;
+            ImGui::SameLine(ImGui::GetCursorPosX() + avail - 60.0f - 65.0f - ImGui::GetStyle().ItemSpacing.x);
+        }
+        Theme::PushGreenButton();
+        if (ImGui::Button("Edit", ImVec2(60.0f, 0))) {
+            enterEdit_(note);
+        }
+        Theme::PopButton();
+
+        ImGui::SameLine();
+
+        Theme::PushAmberButton();
+        if (ImGui::Button("Delete", ImVec2(60.0f, 0))) {
+            std::string idToDelete = note->id;
             advanceSelectionAfterDelete_(idToDelete);
             store_.Delete(idToDelete);
             Save();

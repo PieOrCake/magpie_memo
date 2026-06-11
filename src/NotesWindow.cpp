@@ -240,14 +240,24 @@ void NotesWindow::Render()
     ImGui::BeginChild("##notes_list", leftPaneSize, true);
     Theme::PopFrameBg();
 
+    // Capture a click here but defer the actual navigation until AFTER EndChild:
+    // OpenPopup() (inside requestSelect_) hashes its id against the current
+    // window, so it must run in the SAME window scope as the BeginPopupModal in
+    // renderUnsavedModal_ (the parent window) — not inside this child — or the
+    // unsaved-changes modal never opens.
+    std::string clickedId;
     for (const auto& note : notes) {
         bool selected = (note.id == selectedId_);
         if (ImGui::Selectable(note.title.c_str(), selected)) {
-            requestSelect_(note.id);
+            clickedId = note.id;
         }
     }
 
     ImGui::EndChild();
+
+    if (!clickedId.empty()) {
+        requestSelect_(clickedId);
+    }
 
     // Create New Note button sits below the list.
     Theme::PushGreenButton();

@@ -43,7 +43,7 @@ void AddonOptions();
 // ── Settings persistence (settings.json in the addon data dir) ────────────
 static std::string SettingsPath() {
     if (!APIDefs) return std::string();
-    const char* dir = APIDefs->Paths_GetAddonDirectory("Magpie Memo");
+    const char* dir = APIDefs->Paths_GetAddonDirectory("MagpieMemo");
     if (!dir || !*dir) return std::string();
     std::error_code ec;
     std::filesystem::create_directories(dir, ec);

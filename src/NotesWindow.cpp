@@ -20,7 +20,7 @@ void NotesWindow::Init(AddonAPI_t* api)
 {
     api_ = api;
 
-    const char* dir = api->Paths_GetAddonDirectory("Magpie Memo");
+    const char* dir = api->Paths_GetAddonDirectory("MagpieMemo");
     if (dir && dir[0] != '\0') {
         fs::path addonDir(dir);
         std::error_code ec;
@@ -228,10 +228,16 @@ void NotesWindow::renderUnsavedModal_()
 
 void NotesWindow::Render()
 {
-    // Draw the modal first so it can open this frame if triggered below.
+    // Draw the modals first so they can open this frame if triggered below.
     renderUnsavedModal_();
+    renderDeleteModal_();
 
     const auto& notes = store_.Notes();
+
+    // A Delete button click (inside the detail child below) is captured here and
+    // resolved AFTER the child ends, so OpenPopup runs in the parent-window scope
+    // where renderDeleteModal_'s BeginPopupModal lives.
+    std::string deleteClickedId;
 
     // ── Left column: the note list with the "Create New Note" button directly
     //    beneath it. Grouped so the right-hand panel (added with SameLine below)
@@ -311,12 +317,7 @@ void NotesWindow::Render()
         }
         Theme::PushAmberButton();
         if (ImGui::Button("Delete", ImVec2(60.0f, 0))) {
-            std::string idToDelete = note->id;
-            cancelEdit_();
-            advanceSelectionAfterDelete_(idToDelete);
-            store_.Delete(idToDelete);
-            Save();
-            note = nullptr;
+            deleteClickedId = note->id;   // confirm before deleting
         }
         Theme::PopButton();
 
@@ -359,11 +360,7 @@ void NotesWindow::Render()
 
         Theme::PushAmberButton();
         if (ImGui::Button("Delete", ImVec2(60.0f, 0))) {
-            std::string idToDelete = note->id;
-            advanceSelectionAfterDelete_(idToDelete);
-            store_.Delete(idToDelete);
-            Save();
-            note = nullptr;
+            deleteClickedId = note->id;   // confirm before deleting
         }
         Theme::PopButton();
 
@@ -387,4 +384,53 @@ void NotesWindow::Render()
     }
 
     ImGui::EndChild();
+
+    // Open the delete-confirmation modal in the parent-window scope (matches the
+    // BeginPopupModal in renderDeleteModal_).
+    if (!deleteClickedId.empty()) {
+        pendingDeleteId_ = deleteClickedId;
+        ImGui::OpenPopup("Confirm Delete");
+    }
+}
+
+// ── Delete confirmation ─────────────────────────────────────────────────────
+
+void NotesWindow::performDelete_(const std::string& id)
+{
+    if (id.empty()) return;
+    if (mode_ == Mode::Edit) cancelEdit_();      // drop any edit state first
+    advanceSelectionAfterDelete_(id);            // pick a neighbour (note still present)
+    store_.Delete(id);
+    Save();
+}
+
+void NotesWindow::renderDeleteModal_()
+{
+    ImVec2 display = ImGui::GetIO().DisplaySize;
+    ImGui::SetNextWindowPos(ImVec2(display.x * 0.5f, display.y * 0.5f),
+                            ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    if (ImGui::BeginPopupModal("Confirm Delete", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::Text("Delete this note? This cannot be undone.");
+        ImGui::Spacing();
+
+        Theme::PushAmberButton();
+        if (ImGui::Button("Delete", ImVec2(80, 0))) {
+            performDelete_(pendingDeleteId_);
+            pendingDeleteId_.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        Theme::PopButton();
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Cancel", ImVec2(80, 0))) {
+            pendingDeleteId_.clear();
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
 }

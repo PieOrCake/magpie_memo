@@ -35,6 +35,9 @@ private:
     std::string pendingSelectId_;  // non-empty => switch to this note after save/discard
     bool        pendingCreate_ = false;  // true => create new note after save/discard
 
+    // ── Delete-confirmation ───────────────────────────────────────────────
+    std::string pendingDeleteId_;  // non-empty => the note awaiting delete confirmation
+
     // ── Private helpers ───────────────────────────────────────────────────
     void selectFirst_();
     void advanceSelectionAfterDelete_(const std::string& deletedId);
@@ -58,4 +61,10 @@ private:
     // Draw the dirty-state modal.  Returns true when open (caller must not
     // do further navigation this frame).
     void renderUnsavedModal_();
+
+    // Draw the delete-confirmation modal (acts on pendingDeleteId_).
+    void renderDeleteModal_();
+
+    // Perform the actual deletion of `id` (handles edit-mode + selection).
+    void performDelete_(const std::string& id);
 };

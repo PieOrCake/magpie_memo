@@ -89,7 +89,7 @@ void NotesWindow::advanceSelectionAfterDelete_(const std::string& deletedId)
 void NotesWindow::enterEdit_(Magpie::Note* note)
 {
     if (!note) return;
-    editBuffer_  = note->body;
+    bodyEditor_.SetText(note->body);
     titleBuffer_ = note->title;
     mode_ = Mode::Edit;
 }
@@ -98,19 +98,19 @@ void NotesWindow::commitEdit_()
 {
     Magpie::Note* note = selectedId_.empty() ? nullptr : store_.Get(selectedId_);
     if (note) {
-        note->body  = editBuffer_;
+        note->body  = bodyEditor_.GetText();
         note->title = titleBuffer_;
         Save();
     }
     mode_ = Mode::View;
-    editBuffer_.clear();
+    bodyEditor_.Clear();
     titleBuffer_.clear();
 }
 
 void NotesWindow::cancelEdit_()
 {
     mode_ = Mode::View;
-    editBuffer_.clear();
+    bodyEditor_.Clear();
     titleBuffer_.clear();
 }
 
@@ -128,7 +128,7 @@ void NotesWindow::resolvePending_()
         selectedId_ = pendingSelectId_;
         pendingSelectId_.clear();
         mode_ = Mode::View;
-        editBuffer_.clear();
+        bodyEditor_.Clear();
         titleBuffer_.clear();
     }
 }
@@ -141,7 +141,7 @@ void NotesWindow::requestSelect_(const std::string& id)
     if (dirty) {
         Magpie::Note* cur = store_.Get(selectedId_);
         if (cur) {
-            dirty = (editBuffer_ != cur->body) || (titleBuffer_ != cur->title);
+            dirty = (bodyEditor_.GetText() != cur->body) || (titleBuffer_ != cur->title);
         }
     }
 
@@ -152,7 +152,7 @@ void NotesWindow::requestSelect_(const std::string& id)
     } else {
         selectedId_ = id;
         mode_ = Mode::View;
-        editBuffer_.clear();
+        bodyEditor_.Clear();
         titleBuffer_.clear();
     }
 }
@@ -163,7 +163,7 @@ void NotesWindow::requestCreate_()
     if (dirty) {
         Magpie::Note* cur = store_.Get(selectedId_);
         if (cur) {
-            dirty = (editBuffer_ != cur->body) || (titleBuffer_ != cur->title);
+            dirty = (bodyEditor_.GetText() != cur->body) || (titleBuffer_ != cur->title);
         }
     }
 
@@ -327,12 +327,12 @@ void NotesWindow::Render()
 
             ImGui::Spacing();
 
-            // Editable body.
-            ImVec2 bodySize(ImGui::GetContentRegionAvail().x,
-                            ImGui::GetContentRegionAvail().y);
-            Theme::PushEditBg();
-            ImGui::InputTextMultiline("##edit", &editBuffer_, bodySize);
-            Theme::PopFrameBg();
+            // Editable body — chat codes render as atomic chip cells;
+            // markdown syntax stays as raw text (edit = source view).
+            bodyEditor_.Render("##body_edit",
+                               ImGui::GetContentRegionAvail().x,
+                               ImGui::GetColorU32(Theme::BORDER_GOLD),
+                               /*minLines=*/6);
         }
     } else {
         // ── View mode ──────────────────────────────────────────────────────

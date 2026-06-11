@@ -56,6 +56,10 @@ extern "C" __declspec(dllexport) AddonDefinition_t* GetAddonDef() {
 }
 
 // ── AddonLoad ─────────────────────────────────────────────────────────────
+// TODO: register a WndProc via APIDefs->WndProc_Register to call
+//       Magpie::ChipInputActive / Magpie::RequestChipBlur for held-key edge
+//       cases (e.g. WASD leaking to the game while a chip cell is focused).
+//       This is deferred polish -- not required for the basic integration.
 void AddonLoad(AddonAPI_t* aApi) {
     APIDefs = aApi;
 

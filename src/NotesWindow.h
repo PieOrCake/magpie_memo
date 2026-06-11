@@ -5,6 +5,7 @@
 #include <filesystem>
 #include "nexus/Nexus.h"
 #include "NotesStore.h"
+#include "ChipTextEdit.h"
 
 class NotesWindow {
 public:
@@ -24,9 +25,9 @@ private:
     std::filesystem::path notesFile_;
 
     // ── Edit-mode working copies ──────────────────────────────────────────
-    Mode        mode_        = Mode::View;
-    std::string editBuffer_;   // working copy of note body while editing
-    std::string titleBuffer_;  // working copy of note title while editing
+    Mode                   mode_        = Mode::View;
+    Magpie::ChipTextEdit   bodyEditor_;  // working copy of note body while editing
+    std::string            titleBuffer_; // working copy of note title while editing
 
     // ── Dirty-guard pending navigation ────────────────────────────────────
     // When a navigation is requested while dirty we stash it here and open

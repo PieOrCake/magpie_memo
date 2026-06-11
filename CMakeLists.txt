@@ -53,6 +53,7 @@ if(NOT MAGPIE_HOST_TESTS)
         src/MarkdownRender.cpp
         src/chat/ChatLinks.cpp
         src/ChipResolver.cpp
+        src/ChipColor.cpp
         src/ChipCodec.cpp
         src/ChipTextEdit.cpp
         src/ChipRich.cpp
@@ -87,6 +88,7 @@ else()
         src/Markdown.cpp
         src/chat/ChatLinks.cpp
         src/ChipResolver.cpp
+        src/ChipColor.cpp
         src/ChipCodec.cpp
         src/IconUrl.cpp
     )
@@ -96,6 +98,7 @@ else()
     target_include_directories(magpie_host_tests PRIVATE
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/public
     )
 
     set_target_properties(magpie_host_tests PROPERTIES

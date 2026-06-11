@@ -144,10 +144,10 @@ static void Measure(std::vector<ChipCell>& cells) {
     for (auto& c : cells) {
         if (c.isChip) {
             // Resolved name from Decoder Ring when warm; structural label otherwise
-            // (ChipLabel handles the fallback and never returns empty). Colour stays
-            // structural so the chip tint is stable regardless of resolution.
+            // (ChipLabel never returns empty). Colour matches the view-mode chips:
+            // native GW2 type colour, items by rarity (Basic until resolved).
             std::string name = Magpie::ChipLabel(c.code);
-            c.name = name; c.color = Magpie::ResolveChip(c.code).color;
+            c.name = name; c.color = Magpie::ChipDisplayColor(c.code);
             c.width = ImGui::CalcTextSize(name.c_str()).x + 6.0f;   // small side padding
         } else if (IsNewlineCell(c)) {
             c.width = 0.0f;   // visual width; the GETWIDTH sentinel is handled in ChipTE_GetWidth

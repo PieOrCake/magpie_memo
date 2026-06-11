@@ -18,7 +18,8 @@
 #include <cstdint>
 
 // Bump on ANY change to DecoderRingApi or DecoderRecord layout/semantics.
-#define DECODER_RING_API_VERSION   1u
+// v2: added DecoderRecord::rarity (item links) — see DecoderRarity below.
+#define DECODER_RING_API_VERSION   2u
 // DataLink identifier the service publishes the DecoderRingApi struct under.
 #define DECODER_RING_DATALINK      "DECODER_RING_API"
 // Service announces its API is live (raised on load + in reply to a ping).
@@ -49,6 +50,15 @@ enum DecoderBound : uint8_t {
 // POI kind for waypoint/map links.
 enum DecoderPoiKind : uint8_t { DP_Waypoint = 0, DP_PointOfInterest = 1, DP_Vista = 2 };
 
+// Item rarity (mirrors the GW2 /v2/items "rarity" string set). DR_RarityUnknown is
+// the not-yet-resolved value and what an old disk-cache entry (lacking the field)
+// reads back as — consumers must treat it as "unknown", never as a real tier.
+enum DecoderRarity : uint8_t {
+    DR_RarityUnknown = 0,  // unresolved, or read from a pre-v2 cache lacking rarity
+    DR_Junk       = 1, DR_Basic    = 2, DR_Fine     = 3, DR_Masterwork = 4,
+    DR_Rare       = 5, DR_Exotic   = 6, DR_Ascended = 7, DR_Legendary  = 8,
+};
+
 // One pre-formatted skill tooltip fact: a render-service icon URL + a label.
 struct DecoderFact {
     char icon[128];   // render-service icon URL ("" if none)
@@ -70,7 +80,7 @@ struct DecoderRecord {
     uint8_t  bound;           // DecoderBound
     uint8_t  noSell;          // 1 = cannot vendor to an NPC (does NOT imply untradeable)
     uint8_t  tradeable;       // 1 = eligible for the trading post
-    uint8_t  _pad0;           // explicit padding (keep layout deterministic)
+    uint8_t  rarity;          // DecoderRarity; DR_RarityUnknown if unresolved / pre-v2 cache
     int32_t  vendorValue;     // vendor sale value, copper
 
     // --- Skill (linkType == 0x06) ---

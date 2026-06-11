@@ -5,8 +5,11 @@
 #include "ChipResolver.h"
 #include "ChipCodec.h"
 #include "IconUrl.h"
+#include "ChipColor.h"
+#include "DecoderRingApi.h"
 #include <iostream>
 #include <string>
+#include <cstdint>
 
 // ── Minimal test harness ──────────────────────────────────────────────────────
 
@@ -692,6 +695,57 @@ static void test_iconurl_split_empty_does_not_crash()
     CHECK_EQ(s.endpoint, std::string("/"));
 }
 
+// ── ChipColor tests ─────────────────────────────────────────────────────────────
+
+// Mirror of the packing in ChipColor.cpp (IM_COL32 ABGR, alpha 255).
+static uint32_t packRGB(uint8_t r, uint8_t g, uint8_t b) {
+    return (uint32_t(0xFFu) << 24) | (uint32_t(b) << 16) | (uint32_t(g) << 8) | uint32_t(r);
+}
+
+static void test_chipcolor_item_rarity_palette()
+{
+    using namespace Magpie;
+    // Exact Pie UI RarityColor values (float->255).
+    CHECK(ChipColorForItemRarity(DR_Junk)       == packRGB(171, 171, 171));
+    CHECK(ChipColorForItemRarity(DR_Basic)      == packRGB(255, 255, 255));
+    CHECK(ChipColorForItemRarity(DR_Fine)       == packRGB( 97, 163, 217));
+    CHECK(ChipColorForItemRarity(DR_Masterwork) == packRGB( 31, 214,   0));
+    CHECK(ChipColorForItemRarity(DR_Rare)       == packRGB(255, 214,   0));
+    CHECK(ChipColorForItemRarity(DR_Exotic)     == packRGB(255, 171,   0));
+    CHECK(ChipColorForItemRarity(DR_Ascended)   == packRGB(250,  61, 140));
+    CHECK(ChipColorForItemRarity(DR_Legendary)  == packRGB(163,  54, 237));
+}
+
+static void test_chipcolor_item_unknown_is_basic()
+{
+    using namespace Magpie;
+    // Unresolved / absent service -> Basic (white), never a tier.
+    CHECK(ChipColorForItemRarity(DR_RarityUnknown) == packRGB(255, 255, 255));
+    CHECK(ChipColorForItemRarity(DR_RarityUnknown) == ChipColorForItemRarity(DR_Basic));
+}
+
+static void test_chipcolor_nonitem_types_are_blue()
+{
+    using namespace Magpie;
+    using namespace PieUI::ChatLinks;
+    const uint32_t blue = packRGB(120, 200, 255);
+    CHECK(ChipColorForType(LINK_MAP)   == blue);   // waypoint
+    CHECK(ChipColorForType(LINK_SKILL) == blue);
+    CHECK(ChipColorForType(LINK_BUILD) == blue);
+    CHECK(ChipColorForType(LINK_SKIN)  == blue);
+}
+
+static void test_chipcolor_combined_rule()
+{
+    using namespace Magpie;
+    using namespace PieUI::ChatLinks;
+    // Item -> rarity colour; waypoint -> blue regardless of the rarity arg.
+    CHECK(ChipColor(LINK_ITEM, DR_Exotic) == packRGB(255, 171, 0));
+    CHECK(ChipColor(LINK_ITEM, DR_RarityUnknown) == packRGB(255, 255, 255)); // Basic default
+    CHECK(ChipColor(LINK_MAP, DR_Exotic) == packRGB(120, 200, 255));         // type wins for non-items
+    CHECK(ChipColor(LINK_MAP, DR_RarityUnknown) == packRGB(120, 200, 255));
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 int main()
@@ -761,6 +815,10 @@ int main()
     test_iconurl_split_no_path();
     test_iconurl_split_malformed();
     test_iconurl_split_empty_does_not_crash();
+    test_chipcolor_item_rarity_palette();
+    test_chipcolor_item_unknown_is_basic();
+    test_chipcolor_nonitem_types_are_blue();
+    test_chipcolor_combined_rule();
 
     if (s_failures == 0) {
         std::cout << "ALL PASS\n";

@@ -20,9 +20,10 @@
 #include <cstring>  // strlen
 #include <string>
 
-#include "ChipResolver.h"            // Magpie::ResolveChip (structural)
+#include "ChipResolver.h"            // Magpie::ResolveChip (structural label)
+#include "ChipColor.h"               // Magpie::ChipColor (native GW2 chip colours)
 #include "DecoderClient.h"           // Magpie::Decoder::Present / Resolve
-#include "DecoderRingApi.h"          // DecoderRecord + enums
+#include "DecoderRingApi.h"          // DecoderRecord + enums (rarity)
 #include "IconCache.h"               // Magpie::Icons::RequestUrl / Get
 #include "chat/ChatLinks.h"          // SegmentLine -> (linkType, id)
 
@@ -30,8 +31,7 @@ namespace Magpie {
 
 namespace {
 
-constexpr float kPadX     = 4.0f;   // horizontal padding inside the chip bg
-constexpr float kIconGap  = 3.0f;   // gap between icon and label
+constexpr float kIconGap  = 3.0f;   // gap between the inline icon and the label
 
 // Pull the (linkType, id) correlation key out of a chat code. A single chat
 // code segments to one Link segment; if anything is off we return false and the
@@ -61,21 +61,31 @@ struct ChipState {
 ChipState Resolve(const std::string& code)
 {
     ChipState st;
+    // Structural label is the offline fallback (works with no Decoder Ring).
     const ChipView structural = Magpie::ResolveChip(code);
-    st.color = structural.color;
     st.label = structural.label.empty() ? "[link]" : structural.label;
 
     uint8_t linkType = 0; uint32_t id = 0;
-    if (LinkKey(code, linkType, id) && Magpie::Decoder::Present()) {
+    const bool haveKey = LinkKey(code, linkType, id);
+
+    // Item rarity is only known from a warm Decoder record; default Unknown
+    // (-> Basic colour) so cold/absent items still render in a sensible colour.
+    uint8_t rarity = DR_RarityUnknown;
+
+    if (haveKey && Magpie::Decoder::Present()) {
         DecoderRecord rec{};
         if (Magpie::Decoder::Resolve(linkType, id, code.c_str(), rec) && rec.name[0] != '\0') {
-            st.warm  = true;
-            st.rec   = rec;
-            // Bracket the resolved name to match the structural style.
+            st.warm = true;
+            st.rec  = rec;
             std::string name(rec.name);
-            st.label = "[" + name + "]";
+            st.label = "[" + name + "]";   // bracket to match the structural style
+            if (linkType == PieUI::ChatLinks::LINK_ITEM) rarity = rec.rarity;
         }
     }
+
+    // Colour is a pure function of (type, rarity): items by rarity, everything
+    // else the native link blue — recomputed from the current record state.
+    st.color = ChipColor(linkType, rarity);
     return st;
 }
 
@@ -186,11 +196,17 @@ std::string ChipLabel(const std::string& code)
     return Resolve(code).label;
 }
 
-// Width = optional icon (square fontSize) + gap + label text + 2*padX.
+uint32_t ChipDisplayColor(const std::string& code)
+{
+    return Resolve(code).color;
+}
+
+// Width = optional inline icon (square fontSize) + gap + coloured label text.
+// No box/padding — the chip is just coloured inline text (matching the chatbox).
 // Re-derives the same ChipState as the draw so the two agree.
 static float ComputeWidth(ImFont* font, float fontSize, const ChipState& st)
 {
-    float w = kPadX * 2.0f;
+    float w = 0.0f;
     // Icon is shown only when warm AND the texture is ready; the wrap pre-check
     // may briefly disagree with the draw on the single frame an icon finishes
     // loading — harmless (only affects a wrap decision, never correctness).
@@ -213,17 +229,15 @@ float DrawRichChip(ImDrawList* dl, ImFont* font, float fontSize, const ImVec2& p
     const ChipState st = Resolve(code);
     const float width = ComputeWidth(font, fontSize, st);
 
+    // No box / border / background — the chip is coloured inline text. The rect
+    // below is used only for hover/right-click hit-testing, never drawn.
     const float padY = 1.0f;
     const ImVec2 rMin(pos.x, pos.y - padY);
     const ImVec2 rMax(pos.x + width, pos.y + fontSize + padY);
 
-    // Background: faint tint of the structural colour (drop alpha to ~0x40).
-    const ImU32 bgCol = (st.color & 0x00FFFFFF) | 0x40000000;
-    dl->AddRectFilled(rMin, rMax, bgCol, 3.0f);
+    float penX = pos.x;
 
-    float penX = pos.x + kPadX;
-
-    // Optional icon (square, fontSize x fontSize) — only when warm + ready.
+    // Optional inline icon (square, fontSize x fontSize) — only when warm + ready.
     if (st.warm && st.rec.iconUrl[0]) {
         Texture_t* tex = Magpie::Icons::Get(st.rec.iconUrl);  // never null Resource
         if (tex != nullptr) {
@@ -234,9 +248,8 @@ float DrawRichChip(ImDrawList* dl, ImFont* font, float fontSize, const ImVec2& p
         }
     }
 
-    // Label text in the structural colour (opaque).
-    const ImU32 labelCol = st.color | 0xFF000000;
-    dl->AddText(font, fontSize, ImVec2(penX, pos.y), labelCol, st.label.c_str());
+    // Label as coloured inline text — colour conveys type (and item rarity).
+    dl->AddText(font, fontSize, ImVec2(penX, pos.y), st.color, st.label.c_str());
 
     // ── Interaction: manual hit-test against the chip rect ──────────────────
     // We are inside the view child window's draw, so OpenPopup/BeginPopup hash

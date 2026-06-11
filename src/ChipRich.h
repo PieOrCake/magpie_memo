@@ -12,6 +12,7 @@
 
 #include "imgui.h"
 #include <string>
+#include <cstdint>
 
 namespace Magpie {
 
@@ -20,6 +21,12 @@ namespace Magpie {
 // style ("[Copper Ore]" / "[Item]"). Never returns empty.
 // Used by BOTH edit-mode cells and view-mode chips.
 std::string ChipLabel(const std::string& code);
+
+// Native GW2 chip colour for a code: item rarity colour when a warm Decoder
+// record carries it, else the per-type colour (waypoint/skill/build/... blue;
+// items default to Basic until resolved). Packed IM_COL32. Used by edit-mode
+// cells so they match the view-mode chip colours.
+uint32_t ChipDisplayColor(const std::string& code);
 
 // Width (advance) a rich chip will consume at the given font/size. Must match
 // what DrawRichChip produces so the renderer's wrap check stays consistent.

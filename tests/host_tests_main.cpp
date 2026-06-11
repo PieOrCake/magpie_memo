@@ -168,6 +168,23 @@ static void test_fromjson_empty_array()
     CHECK(store.Notes().empty());
 }
 
+static void test_create_after_fromjson_has_unique_id()
+{
+    // Regression: loading notes from disk must advance the id counter so a
+    // subsequent Create() cannot mint an id that collides with a loaded one.
+    Magpie::NotesStore store;
+    bool ok = store.FromJson(
+        "[{\"id\":\"00000000\",\"title\":\"A\",\"body\":\"\"},"
+        " {\"id\":\"00000001\",\"title\":\"B\",\"body\":\"\"}]");
+    CHECK(ok);
+    std::string newId = store.Create("C").id;
+    CHECK(newId != std::string("00000000"));
+    CHECK(newId != std::string("00000001"));
+    // And the new note is independently addressable.
+    CHECK(store.Get(newId) != nullptr);
+    CHECK(store.Notes().size() == 3);
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 int main()
@@ -185,6 +202,7 @@ int main()
     test_fromjson_invalid_returns_false_and_leaves_state();
     test_fromjson_wrong_shape_returns_false();
     test_fromjson_empty_array();
+    test_create_after_fromjson_has_unique_id();
 
     if (s_failures == 0) {
         std::cout << "ALL PASS\n";

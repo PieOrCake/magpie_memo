@@ -80,7 +80,21 @@ bool NotesStore::FromJson(const std::string& json)
         tmp.push_back(std::move(n));
     }
 
+    // Advance the id counter past any loaded ids so a later Create() can't mint
+    // an id that collides with one read from disk.
+    unsigned int maxId = 0;
+    bool anyHex = false;
+    for (const auto& n : tmp) {
+        try {
+            unsigned long v = std::stoul(n.id, nullptr, 16);
+            if (!anyHex || v > maxId) { maxId = static_cast<unsigned int>(v); anyHex = true; }
+        } catch (...) {
+            // Non-hex id (foreign/future scheme): ignore for counter purposes.
+        }
+    }
+
     notes_ = std::move(tmp);
+    if (anyHex) nextId_ = maxId + 1;
     return true;
 }
 

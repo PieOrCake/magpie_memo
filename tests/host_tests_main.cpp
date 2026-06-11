@@ -4,6 +4,7 @@
 #include "Markdown.h"
 #include "ChipResolver.h"
 #include "ChipCodec.h"
+#include "IconUrl.h"
 #include <iostream>
 #include <string>
 
@@ -638,6 +639,59 @@ static void test_chipcodec_roundtrip_mixed()
     CHECK(nlCount == 2);
 }
 
+// ── IconUrl tests ─────────────────────────────────────────────────────────────
+
+static void test_iconurl_key_stable()
+{
+    // Same URL hashes to the same value every call
+    uint32_t a = Magpie::Icons::UrlKey("https://render.guildwars2.com/file/AB/12.png");
+    uint32_t b = Magpie::Icons::UrlKey("https://render.guildwars2.com/file/AB/12.png");
+    CHECK(a == b);
+}
+
+static void test_iconurl_key_differs()
+{
+    // Different URLs produce different hashes
+    uint32_t a = Magpie::Icons::UrlKey("https://render.guildwars2.com/file/AB/12.png");
+    uint32_t b = Magpie::Icons::UrlKey("https://render.guildwars2.com/file/CD/99.png");
+    CHECK(a != b);
+}
+
+static void test_iconurl_key_null_does_not_crash()
+{
+    // Null input must not crash; we just check it runs
+    (void)Magpie::Icons::UrlKey(nullptr);
+    (void)Magpie::Icons::UrlKey("");
+}
+
+static void test_iconurl_split_full_url()
+{
+    auto s = Magpie::Icons::SplitIconUrl("https://render.guildwars2.com/file/AB/12.png");
+    CHECK_EQ(s.remote,   std::string("https://render.guildwars2.com"));
+    CHECK_EQ(s.endpoint, std::string("/file/AB/12.png"));
+}
+
+static void test_iconurl_split_no_path()
+{
+    // URL with no path after the host — endpoint should be "/"
+    auto s = Magpie::Icons::SplitIconUrl("https://render.guildwars2.com");
+    CHECK_EQ(s.endpoint, std::string("/"));
+}
+
+static void test_iconurl_split_malformed()
+{
+    // No "://" — whole string goes into remote, endpoint = "/"
+    auto s = Magpie::Icons::SplitIconUrl("not-a-real-url");
+    CHECK_EQ(s.remote,   std::string("not-a-real-url"));
+    CHECK_EQ(s.endpoint, std::string("/"));
+}
+
+static void test_iconurl_split_empty_does_not_crash()
+{
+    auto s = Magpie::Icons::SplitIconUrl("");
+    CHECK_EQ(s.endpoint, std::string("/"));
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 int main()
@@ -698,6 +752,15 @@ int main()
     test_md_unmatched_star_is_literal();
     test_md_multiline();
     test_md_heading_with_bold();
+
+    // IconUrl pure-helper tests
+    test_iconurl_key_stable();
+    test_iconurl_key_differs();
+    test_iconurl_key_null_does_not_crash();
+    test_iconurl_split_full_url();
+    test_iconurl_split_no_path();
+    test_iconurl_split_malformed();
+    test_iconurl_split_empty_does_not_crash();
 
     if (s_failures == 0) {
         std::cout << "ALL PASS\n";

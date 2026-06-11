@@ -8,6 +8,7 @@
 #include "imgui.h"
 #include "Theme.h"
 #include "NotesWindow.h"
+#include "DecoderClient.h"
 
 // ── Version constants ─────────────────────────────────────────────────────
 #define V_MAJOR    0
@@ -82,6 +83,9 @@ void AddonLoad(AddonAPI_t* aApi) {
     // Initialise notes store (loads from disk).
     g_Notes.Init(APIDefs);
 
+    // Decoder Ring consumer client (optional provider; lifetime-contract safe).
+    Magpie::Decoder::Init(APIDefs);
+
     // TODO: QuickAccess icon (needs an embedded icon asset)
 
     APIDefs->Log(LOGL_INFO, "MagpieMemo", "Magpie Memo loaded.");
@@ -89,6 +93,9 @@ void AddonLoad(AddonAPI_t* aApi) {
 
 // ── AddonUnload ───────────────────────────────────────────────────────────
 void AddonUnload() {
+    // Drop Decoder Ring subscriptions + cache before APIDefs goes away.
+    Magpie::Decoder::Shutdown();
+
     // Save notes before we lose APIDefs (Shutdown only writes to disk — safe).
     g_Notes.Shutdown();
 

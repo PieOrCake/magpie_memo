@@ -55,6 +55,7 @@ if(NOT MAGPIE_HOST_TESTS)
         src/ChipResolver.cpp
         src/ChipCodec.cpp
         src/ChipTextEdit.cpp
+        src/DecoderClient.cpp
         ${IMGUI_SOURCES}
     )
 

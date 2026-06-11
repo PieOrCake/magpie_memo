@@ -1,6 +1,7 @@
 #include "NotesStore.h"
 #include "chat/ChatLinks.h"
 #include "chat/SpecData.h"
+#include "Markdown.h"
 #include <iostream>
 #include <string>
 
@@ -292,6 +293,178 @@ static void test_specdata_profession_name()
     CHECK_EQ(std::string(GetProfessionName(99)),  std::string(""));
 }
 
+// ── Markdown parser tests ─────────────────────────────────────────────────────
+
+static void test_md_heading_level1()
+{
+    auto lines = Magpie::Md::Parse("# Hello");
+    CHECK(lines.size() == 1);
+    CHECK(lines[0].block == Magpie::Md::Block::Heading);
+    CHECK(lines[0].headingLevel == 1);
+    CHECK(lines[0].spans.size() == 1);
+    CHECK(lines[0].spans[0].kind == Magpie::Md::Inline::Text);
+    CHECK_EQ(lines[0].spans[0].text, std::string("Hello"));
+}
+
+static void test_md_heading_level3()
+{
+    auto lines = Magpie::Md::Parse("### SubHead");
+    CHECK(lines.size() == 1);
+    CHECK(lines[0].block == Magpie::Md::Block::Heading);
+    CHECK(lines[0].headingLevel == 3);
+    CHECK(lines[0].spans.size() == 1);
+    CHECK_EQ(lines[0].spans[0].text, std::string("SubHead"));
+}
+
+static void test_md_bullet()
+{
+    auto lines = Magpie::Md::Parse("- item text");
+    CHECK(lines.size() == 1);
+    CHECK(lines[0].block == Magpie::Md::Block::Bullet);
+    CHECK(lines[0].headingLevel == 0);
+    // spans should contain the item text
+    bool foundText = false;
+    for (const auto& s : lines[0].spans) {
+        if (s.kind == Magpie::Md::Inline::Text && s.text.find("item text") != std::string::npos) {
+            foundText = true;
+        }
+    }
+    CHECK(foundText);
+}
+
+static void test_md_paragraph()
+{
+    auto lines = Magpie::Md::Parse("just a plain line");
+    CHECK(lines.size() == 1);
+    CHECK(lines[0].block == Magpie::Md::Block::Paragraph);
+    CHECK(lines[0].headingLevel == 0);
+    CHECK(lines[0].spans.size() >= 1);
+    // Collect all text
+    std::string all;
+    for (const auto& s : lines[0].spans) all += s.text;
+    CHECK_EQ(all, std::string("just a plain line"));
+}
+
+static void test_md_bold()
+{
+    auto lines = Magpie::Md::Parse("a **b** c");
+    CHECK(lines.size() == 1);
+    CHECK(lines[0].block == Magpie::Md::Block::Paragraph);
+    // Expect spans: Text "a ", Bold "b", Text " c" (possibly adjacent texts merged)
+    bool foundBold = false;
+    std::string fullText;
+    for (const auto& s : lines[0].spans) {
+        if (s.kind == Magpie::Md::Inline::Bold) {
+            CHECK_EQ(s.text, std::string("b"));
+            foundBold = true;
+        }
+        if (s.kind == Magpie::Md::Inline::Text) {
+            fullText += s.text;
+        }
+    }
+    CHECK(foundBold);
+    // The surrounding text should be present
+    CHECK(fullText.find("a ") != std::string::npos);
+    CHECK(fullText.find(" c") != std::string::npos);
+}
+
+static void test_md_italic()
+{
+    auto lines = Magpie::Md::Parse("*i*");
+    CHECK(lines.size() == 1);
+    bool foundItalic = false;
+    for (const auto& s : lines[0].spans) {
+        if (s.kind == Magpie::Md::Inline::Italic) {
+            CHECK_EQ(s.text, std::string("i"));
+            foundItalic = true;
+        }
+    }
+    CHECK(foundItalic);
+}
+
+static void test_md_chip_inline()
+{
+    using namespace PieUI::ChatLinks;
+    std::string code = EncodeItem(46774);  // e.g. "[&AgF2tgAA]"
+    std::string body = "see " + code + " there";
+    auto lines = Magpie::Md::Parse(body);
+    CHECK(lines.size() == 1);
+    // Find chip span with the raw code
+    bool foundChip = false;
+    bool foundBefore = false;
+    bool foundAfter  = false;
+    for (const auto& s : lines[0].spans) {
+        if (s.kind == Magpie::Md::Inline::Chip) {
+            CHECK_EQ(s.text, code);
+            foundChip = true;
+        }
+        if (s.kind == Magpie::Md::Inline::Text && s.text.find("see") != std::string::npos) {
+            foundBefore = true;
+        }
+        if (s.kind == Magpie::Md::Inline::Text && s.text.find("there") != std::string::npos) {
+            foundAfter = true;
+        }
+    }
+    CHECK(foundChip);
+    CHECK(foundBefore);
+    CHECK(foundAfter);
+}
+
+static void test_md_bold_with_chip()
+{
+    using namespace PieUI::ChatLinks;
+    std::string code = EncodeItem(1234);
+    std::string body = "**bold** " + code + " end";
+    auto lines = Magpie::Md::Parse(body);
+    CHECK(lines.size() == 1);
+    bool foundBold = false;
+    bool foundChip = false;
+    for (const auto& s : lines[0].spans) {
+        if (s.kind == Magpie::Md::Inline::Bold)  { CHECK_EQ(s.text, std::string("bold")); foundBold = true; }
+        if (s.kind == Magpie::Md::Inline::Chip)  { CHECK_EQ(s.text, code); foundChip = true; }
+    }
+    CHECK(foundBold);
+    CHECK(foundChip);
+}
+
+static void test_md_unmatched_star_is_literal()
+{
+    auto lines = Magpie::Md::Parse("hello *world");
+    CHECK(lines.size() == 1);
+    // The unmatched * must appear literally in the output text
+    std::string all;
+    for (const auto& s : lines[0].spans) all += s.text;
+    CHECK(all.find('*') != std::string::npos);
+    CHECK(all.find("world") != std::string::npos);
+}
+
+static void test_md_multiline()
+{
+    auto lines = Magpie::Md::Parse("line one\nline two\nline three");
+    CHECK(lines.size() == 3);
+    // Each line should contain its own text
+    std::string t0, t1, t2;
+    for (const auto& s : lines[0].spans) t0 += s.text;
+    for (const auto& s : lines[1].spans) t1 += s.text;
+    for (const auto& s : lines[2].spans) t2 += s.text;
+    CHECK(t0.find("line one") != std::string::npos);
+    CHECK(t1.find("line two") != std::string::npos);
+    CHECK(t2.find("line three") != std::string::npos);
+}
+
+static void test_md_heading_with_bold()
+{
+    auto lines = Magpie::Md::Parse("## **title**");
+    CHECK(lines.size() == 1);
+    CHECK(lines[0].block == Magpie::Md::Block::Heading);
+    CHECK(lines[0].headingLevel == 2);
+    bool foundBold = false;
+    for (const auto& s : lines[0].spans) {
+        if (s.kind == Magpie::Md::Inline::Bold) { CHECK_EQ(s.text, std::string("title")); foundBold = true; }
+    }
+    CHECK(foundBold);
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 int main()
@@ -321,6 +494,19 @@ int main()
     test_codec_link_type_none_for_garbage();
     test_specdata_elite_spec_name();
     test_specdata_profession_name();
+
+    // Markdown parser tests
+    test_md_heading_level1();
+    test_md_heading_level3();
+    test_md_bullet();
+    test_md_paragraph();
+    test_md_bold();
+    test_md_italic();
+    test_md_chip_inline();
+    test_md_bold_with_chip();
+    test_md_unmatched_star_is_literal();
+    test_md_multiline();
+    test_md_heading_with_bold();
 
     if (s_failures == 0) {
         std::cout << "ALL PASS\n";

@@ -49,6 +49,7 @@ if(NOT MAGPIE_HOST_TESTS)
         src/Theme.cpp
         src/NotesStore.cpp
         src/NotesWindow.cpp
+        src/Markdown.cpp
         src/chat/ChatLinks.cpp
         ${IMGUI_SOURCES}
     )
@@ -75,6 +76,7 @@ else()
     set(HOST_TEST_SOURCES
         tests/host_tests_main.cpp
         src/NotesStore.cpp
+        src/Markdown.cpp
         src/chat/ChatLinks.cpp
     )
 

@@ -194,7 +194,44 @@ static void test_create_after_fromjson_has_unique_id()
     CHECK(store.Notes().size() == 3);
 }
 
+// ── Decoder Ring ABI header tests ──────────────────────────────────────────────
+
+static void test_decoder_header_is_v3()
+{
+    // Pin the vendored ABI header to the current Decoder Ring release. If DR
+    // ships a new header and we forget to re-vendor, this fails loudly. (The
+    // runtime guard in DecoderClient accepts >= MIN_SUPPORTED for forward-compat;
+    // this is the separate "is the header current" check.)
+    CHECK(DECODER_RING_API_VERSION == 3u);
+}
+
 // ── ChatLinks codec tests ─────────────────────────────────────────────────────
+
+static void test_codec_decode_item_extracts_upgrades()
+{
+    using namespace PieUI::ChatLinks;
+    // A geared item (weapon) with two upgrade slots filled (rune/sigil ids).
+    // Step 3 reads these to show the upgrade's set bonuses on the item tooltip.
+    std::string link = EncodeItem(46774, 1, 0, 24615, 24618);
+    CHECK(!link.empty());
+    CHECK(DetectType(link) == LINK_ITEM);
+    DecodedItemLink di;
+    CHECK(DecodeItem(link, di));
+    CHECK(di.item_id == 46774u);
+    CHECK(di.upgrade1_id == 24615u);
+    CHECK(di.upgrade2_id == 24618u);
+}
+
+static void test_codec_decode_item_no_upgrades_is_zero()
+{
+    using namespace PieUI::ChatLinks;
+    // A plain item has no upgrades -> both ids must be 0 (Step 3 skips them).
+    std::string link = EncodeItem(19684 /* Copper Ore */, 1);
+    DecodedItemLink di;
+    CHECK(DecodeItem(link, di));
+    CHECK(di.upgrade1_id == 0u);
+    CHECK(di.upgrade2_id == 0u);
+}
 
 static void test_codec_encode_item_roundtrip()
 {
@@ -765,7 +802,12 @@ int main()
     test_fromjson_empty_array();
     test_create_after_fromjson_has_unique_id();
 
+    // Decoder Ring ABI header tests
+    test_decoder_header_is_v3();
+
     // ChatLinks codec tests
+    test_codec_decode_item_extracts_upgrades();
+    test_codec_decode_item_no_upgrades_is_zero();
     test_codec_encode_item_roundtrip();
     test_codec_encode_map_roundtrip();
     test_codec_encode_skill_roundtrip();

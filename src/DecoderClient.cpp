@@ -32,6 +32,16 @@ namespace {
 
 AddonAPI_t* APIDefs = nullptr;
 
+// Lowest Decoder Ring ABI we still understand. DR's contract is additive and
+// layout-stable across bumps (v2 and v3 share an identical struct layout — v3
+// only gives existing description[]/facts[] new meaning for items), so we accept
+// any service at-or-above this minimum and read only the fields we know,
+// treating empty fields as "absent". This keeps Magpie working across future
+// additive DR releases instead of going dark the moment apiVersion ticks up.
+// RAISE THIS (and re-vendor the header) only if DR announces a LAYOUT-breaking
+// change. The host tests still pin the vendored header to the current version.
+constexpr uint32_t DECODER_RING_MIN_SUPPORTED = 2u;
+
 std::mutex                                g_mutex;
 std::unordered_map<uint64_t, DecoderRecord> g_cache;   // key -> resolved record
 std::unordered_set<uint64_t>              g_pending;  // keys with a fetch in flight
@@ -47,7 +57,7 @@ inline uint64_t Key(uint8_t linkType, uint32_t id) {
 DecoderRingApi* GetDecoder() {
     if (!APIDefs) return nullptr;
     auto* api = static_cast<DecoderRingApi*>(APIDefs->DataLink_Get(DECODER_RING_DATALINK));
-    return (api && api->apiVersion == DECODER_RING_API_VERSION) ? api : nullptr;
+    return (api && api->apiVersion >= DECODER_RING_MIN_SUPPORTED) ? api : nullptr;
 }
 
 // ── Event handlers (void(*)(void*) == EVENT_CONSUME) ───────────────────────
@@ -57,7 +67,7 @@ DecoderRingApi* GetDecoder() {
 void OnResolved(void* payload) {
     if (!payload) return;
     auto* rec = static_cast<const DecoderRecord*>(payload);
-    if (rec->schemaVersion != DECODER_RING_API_VERSION) return;
+    if (rec->schemaVersion < DECODER_RING_MIN_SUPPORTED) return;
 
     const uint64_t k = Key(rec->linkType, rec->id);
     std::lock_guard<std::mutex> lock(g_mutex);
@@ -137,7 +147,7 @@ bool Resolve(uint8_t linkType, uint32_t id, const char* chatCode, DecoderRecord&
 
     switch (st) {
     case DR_Resolved:
-        if (rec.schemaVersion != DECODER_RING_API_VERSION) return false;
+        if (rec.schemaVersion < DECODER_RING_MIN_SUPPORTED) return false;
         {
             std::lock_guard<std::mutex> lock(g_mutex);
             g_cache[k] = rec;

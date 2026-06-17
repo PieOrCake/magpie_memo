@@ -23,7 +23,7 @@
 // ── Version constants ─────────────────────────────────────────────────────
 #define V_MAJOR    0
 #define V_MINOR    9
-#define V_BUILD    0
+#define V_BUILD    1
 #define V_REVISION 0
 
 // ── Globals ───────────────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ extern "C" __declspec(dllexport) AddonDefinition_t* GetAddonDef() {
     AddonDef.Version.Build    = V_BUILD;
     AddonDef.Version.Revision = V_REVISION;
     AddonDef.Author           = "PieOrCake.7635";
-    AddonDef.Description      = "In-game sticky notes and reminders for Guild Wars 2.";
+    AddonDef.Description      = "Notepad with markdown and rich chips. Recommended: Decoder Ring.";
     AddonDef.Load             = AddonLoad;
     AddonDef.Unload           = AddonUnload;
     AddonDef.Flags            = AF_None;

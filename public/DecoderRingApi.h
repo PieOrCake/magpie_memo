@@ -19,7 +19,10 @@
 
 // Bump on ANY change to DecoderRingApi or DecoderRecord layout/semantics.
 // v2: added DecoderRecord::rarity (item links) — see DecoderRarity below.
-#define DECODER_RING_API_VERSION   2u
+// v3: description[] + facts[] now also carry full item-tooltip data (flavour text
+//     + pre-formatted stat/meta lines) for item links, not just skills. Layout is
+//     unchanged (a capability signal only); gate item tooltips on schemaVersion>=3.
+#define DECODER_RING_API_VERSION   3u
 // DataLink identifier the service publishes the DecoderRingApi struct under.
 #define DECODER_RING_DATALINK      "DECODER_RING_API"
 // Service announces its API is live (raised on load + in reply to a ping).
@@ -59,10 +62,12 @@ enum DecoderRarity : uint8_t {
     DR_Rare       = 5, DR_Exotic   = 6, DR_Ascended = 7, DR_Legendary  = 8,
 };
 
-// One pre-formatted skill tooltip fact: a render-service icon URL + a label.
+// One pre-formatted tooltip fact: a render-service icon URL + a label. Used by
+// both skill links (e.g. "Range: 1200") and item links (e.g. "Defense: 381",
+// "+85 Power"). Item facts carry no icon (icon == "").
 struct DecoderFact {
     char icon[128];   // render-service icon URL ("" if none)
-    char text[160];   // pre-formatted label, e.g. "Range: 1200", "Bleeding (8s)"
+    char text[160];   // pre-formatted label, e.g. "Range: 1200", "Defense: 381"
 };
 
 // Versioned, fixed-size POD metadata record. Trivially copyable; safe in shared
@@ -83,8 +88,11 @@ struct DecoderRecord {
     uint8_t  rarity;          // DecoderRarity; DR_RarityUnknown if unresolved / pre-v2 cache
     int32_t  vendorValue;     // vendor sale value, copper
 
-    // --- Skill (linkType == 0x06) ---
-    char     description[512]; // skill description text
+    // --- Skill (0x06) AND Item (0x02) [description/facts: schemaVersion >= 3] ---
+    // Shared by both link types: skills fill these with their description + fact
+    // lines; items (v3+) fill them with flavour text + tooltip lines (defense,
+    // attributes, infusion slots, rune bonuses, required level, weight, subtype).
+    char     description[512]; // flavour / description text
     uint8_t  factCount;        // number of valid entries in facts[]
     uint8_t  _pad1[3];
     DecoderFact facts[16];     // pre-formatted facts; entries past 16 are dropped

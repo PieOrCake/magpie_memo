@@ -5,7 +5,8 @@
 //     rich tooltip; context menu STILL works (it uses the raw stored code).
 //   * Icon not yet downloaded / failed         -> text-only chip; still works.
 //   * Record warm                              -> resolved name + icon + rich
-//     tooltip (type-specific: item value/flags, skill desc+facts, waypoint map).
+//     tooltip (type-specific: item stats/flavour/value/flags + rune-set bonuses,
+//     skill desc+facts, waypoint map).
 //
 // Presence is read live every call via Decoder::Present()/Resolve() — never
 // latched. All tooltip/rendered text is ASCII.
@@ -142,13 +143,41 @@ const char* BoundText(uint8_t bound)
     }
 }
 
-// Build + emit the tooltip body for a warm record (type-specific).
-void TooltipWarm(const DecoderRecord& rec)
+// Emit up to 16 pre-formatted fact lines (DR clamps factCount, we clamp again).
+void EmitFacts(const DecoderRecord& rec)
 {
-    ImGui::TextUnformatted(rec.name[0] ? rec.name : "(unnamed)");
+    const int n = rec.factCount > 16 ? 16 : rec.factCount;
+    for (int i = 0; i < n; ++i) {
+        if (rec.facts[i].text[0]) ImGui::TextUnformatted(rec.facts[i].text);
+    }
+}
+
+// Build + emit the tooltip body for a warm record (type-specific). `code` is the
+// chip's chat code, used only to fetch upgrade (rune/sigil) records for items.
+void TooltipWarm(const DecoderRecord& rec, const std::string& code)
+{
+    const char* nm = rec.name[0] ? rec.name : "(unnamed)";
+
+    // Items get a rarity-coloured header so the tooltip matches the chip colour.
+    if (rec.linkType == 0x02) {
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ChipColorForItemRarity(rec.rarity)),
+                           "%s", nm);
+    } else {
+        ImGui::TextUnformatted(nm);
+    }
 
     switch (rec.linkType) {
         case 0x02: {  // item
+            // v3+: pre-formatted stat / meta lines (Defense, Weapon Strength,
+            // attributes, infusion slots, weight, required level). Empty against
+            // an older DR, so the tooltip is simply unchanged there.
+            const int nFacts = rec.factCount > 16 ? 16 : rec.factCount;
+            if (nFacts > 0) {
+                ImGui::Separator();
+                EmitFacts(rec);
+            }
+            // Vendor value + bind/trade flags. DR deliberately keeps these OUT of
+            // facts[], so there is no duplication with the stat lines above.
             ImGui::Separator();
             std::string v = "Vendor: ";
             AppendCoin(v, rec.vendorValue);
@@ -157,6 +186,37 @@ void TooltipWarm(const DecoderRecord& rec)
             ImGui::TextUnformatted(rec.tradeable ? "Tradeable on the Trading Post"
                                                  : "Not tradeable");
             if (rec.noSell) ImGui::TextUnformatted("Cannot be sold to a vendor");
+
+            // Rune / sigil set bonuses live on the UPGRADE item's own record (DR
+            // keeps records flat), so decode the chip's upgrade ids and resolve
+            // each as a normal item link. Degrades cleanly: a not-yet-warm upgrade
+            // is skipped and fills on a later frame via the RESOLVED event.
+            PieUI::ChatLinks::DecodedItemLink di;
+            if (PieUI::ChatLinks::DecodeItem(code, di)) {
+                const uint32_t ups[2] = { di.upgrade1_id, di.upgrade2_id };
+                bool header = false;
+                for (uint32_t uid : ups) {
+                    if (uid == 0) continue;
+                    DecoderRecord up{};
+                    if (Magpie::Decoder::Resolve(PieUI::ChatLinks::LINK_ITEM, uid, nullptr, up)) {
+                        if (!header) {
+                            ImGui::Separator();
+                            ImGui::TextUnformatted("Upgrades:");
+                            header = true;
+                        }
+                        if (up.name[0]) ImGui::TextUnformatted(up.name);
+                        EmitFacts(up);
+                    }
+                }
+            }
+
+            // Flavour text reads best at the very foot of the tooltip.
+            if (rec.description[0]) {
+                ImGui::Separator();
+                ImGui::PushTextWrapPos(ImGui::GetFontSize() * 24.0f);
+                ImGui::TextUnformatted(rec.description);
+                ImGui::PopTextWrapPos();
+            }
             break;
         }
         case 0x06: {  // skill
@@ -166,12 +226,9 @@ void TooltipWarm(const DecoderRecord& rec)
                 ImGui::TextUnformatted(rec.description);
                 ImGui::PopTextWrapPos();
             }
-            const int n = rec.factCount > 16 ? 16 : rec.factCount;
-            if (n > 0) {
+            if (rec.factCount > 0) {
                 ImGui::Separator();
-                for (int i = 0; i < n; ++i) {
-                    if (rec.facts[i].text[0]) ImGui::TextUnformatted(rec.facts[i].text);
-                }
+                EmitFacts(rec);
             }
             break;
         }
@@ -264,7 +321,7 @@ float DrawRichChip(ImDrawList* dl, ImFont* font, float fontSize, const ImVec2& p
         if (!ImGui::IsPopupOpen(pid)) {
             ImGui::BeginTooltip();
             if (st.warm) {
-                TooltipWarm(st.rec);
+                TooltipWarm(st.rec, code);
             } else {
                 ImGui::TextUnformatted(st.label.c_str());
                 ImGui::Separator();

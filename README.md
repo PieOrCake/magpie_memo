@@ -19,7 +19,7 @@ If an LLM creating software upsets you, then perhaps this repo isn't for you. Mo
 - **Markdown** in the rendered view: bold, italic, headings, and bullet lists. Edit mode shows the raw source.
 - **View / edit modes** with a distinct edit tint, Save / Cancel, and an unsaved-changes prompt so edits are never lost.
 - **Chat-link chips** — paste any GW2 chat link (waypoint, item, skin, skill, build) into a note and it becomes an inline chip:
-  - Shows the item's **icon and name** with a hover **tooltip** (item value, skill facts, waypoint map, and more).
+  - Shows the item's **icon and name** with a rich hover **tooltip** — item stats, rarity, flavour text and rune/sigil bonuses, skill facts, waypoint map, and full **recipe** breakdowns (ingredients, required rating, and the crafted item).
   - **Right-click** a chip to **Copy chat code** or **Open in wiki**.
   - Build links show their spec automatically (e.g. `[Mirage Build]`).
 - **Works with or without [Decoder Ring](https://github.com/PieOrCake/decoder_ring)**: with it loaded, chips show full names and icons; without it, chips fall back to basic labels and the copy / wiki actions still work. Nothing breaks if it loads or unloads mid-session.

@@ -22,7 +22,8 @@
 // v3: description[] + facts[] now also carry full item-tooltip data (flavour text
 //     + pre-formatted stat/meta lines) for item links, not just skills. Layout is
 //     unchanged (a capability signal only); gate item tooltips on schemaVersion>=3.
-#define DECODER_RING_API_VERSION   3u
+// v4: added recipe links (0x09) support — see Recipe section below.
+#define DECODER_RING_API_VERSION   4u
 // DataLink identifier the service publishes the DecoderRingApi struct under.
 #define DECODER_RING_DATALINK      "DECODER_RING_API"
 // Service announces its API is live (raised on load + in reply to a ping).
@@ -86,7 +87,9 @@ struct DecoderRecord {
     uint8_t  noSell;          // 1 = cannot vendor to an NPC (does NOT imply untradeable)
     uint8_t  tradeable;       // 1 = eligible for the trading post
     uint8_t  rarity;          // DecoderRarity; DR_RarityUnknown if unresolved / pre-v2 cache
-    int32_t  vendorValue;     // vendor sale value, copper
+    int32_t  vendorValue;     // item (0x02): vendor sale value, copper.
+                              // recipe (0x09): holds the output item's id (resolve it as
+                              // a 0x02 link to render the output item's full tooltip).
 
     // --- Skill (0x06) AND Item (0x02) [description/facts: schemaVersion >= 3] ---
     // Shared by both link types: skills fill these with their description + fact
@@ -96,6 +99,12 @@ struct DecoderRecord {
     uint8_t  factCount;        // number of valid entries in facts[]
     uint8_t  _pad1[3];
     DecoderFact facts[16];     // pre-formatted facts; entries past 16 are dropped
+
+    // --- Recipe (linkType == 0x09) ---
+    // name = "Recipe: <output> [(Rarity)]"
+    // iconUrl = output item's icon
+    // facts[] = ingredient lines + "Required Rating: N" (entry count in factCount)
+    // vendorValue = output item id (resolve as 0x02 item link for full tooltip)
 
     // --- Waypoint / POI (linkType == 0x04) ---
     char     mapName[96];      // map the POI sits on

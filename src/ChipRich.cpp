@@ -152,73 +152,83 @@ void EmitFacts(const DecoderRecord& rec)
     }
 }
 
+// Render a full item tooltip panel: rarity-coloured name + stat facts + vendor
+// value / bind-trade flags + rune-set upgrade bonuses + flavour text. `code` is
+// the item's chat code, used ONLY to decode its upgrade (rune/sigil) ids; pass
+// "" when there is no chip code (e.g. a recipe's output item, which has an id
+// but no pasted chat link), and the upgrade section is simply skipped.
+void EmitItemPanel(const DecoderRecord& rec, const std::string& code)
+{
+    const char* nm = rec.name[0] ? rec.name : "(unnamed)";
+    // Rarity-coloured header so the panel matches the chip colour.
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ChipColorForItemRarity(rec.rarity)),
+                       "%s", nm);
+
+    // v3+: pre-formatted stat / meta lines (Defense, Weapon Strength,
+    // attributes, infusion slots, weight, required level). Empty against
+    // an older DR, so the tooltip is simply unchanged there.
+    const int nFacts = rec.factCount > 16 ? 16 : rec.factCount;
+    if (nFacts > 0) {
+        ImGui::Separator();
+        EmitFacts(rec);
+    }
+    // Vendor value + bind/trade flags. DR deliberately keeps these OUT of
+    // facts[], so there is no duplication with the stat lines above.
+    ImGui::Separator();
+    std::string v = "Vendor: ";
+    AppendCoin(v, rec.vendorValue);
+    ImGui::TextUnformatted(v.c_str());
+    if (const char* b = BoundText(rec.bound)) ImGui::TextUnformatted(b);
+    ImGui::TextUnformatted(rec.tradeable ? "Tradeable on the Trading Post"
+                                         : "Not tradeable");
+    if (rec.noSell) ImGui::TextUnformatted("Cannot be sold to a vendor");
+
+    // Rune / sigil set bonuses live on the UPGRADE item's own record (DR
+    // keeps records flat), so decode the chip's upgrade ids and resolve
+    // each as a normal item link. Degrades cleanly: a not-yet-warm upgrade
+    // is skipped and fills on a later frame via the RESOLVED event.
+    PieUI::ChatLinks::DecodedItemLink di;
+    if (!code.empty() && PieUI::ChatLinks::DecodeItem(code, di)) {
+        const uint32_t ups[2] = { di.upgrade1_id, di.upgrade2_id };
+        bool header = false;
+        for (uint32_t uid : ups) {
+            if (uid == 0) continue;
+            DecoderRecord up{};
+            if (Magpie::Decoder::Resolve(PieUI::ChatLinks::LINK_ITEM, uid, nullptr, up)) {
+                if (!header) {
+                    ImGui::Separator();
+                    ImGui::TextUnformatted("Upgrades:");
+                    header = true;
+                }
+                if (up.name[0]) ImGui::TextUnformatted(up.name);
+                EmitFacts(up);
+            }
+        }
+    }
+
+    // Flavour text reads best at the very foot of the tooltip.
+    if (rec.description[0]) {
+        ImGui::Separator();
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 24.0f);
+        ImGui::TextUnformatted(rec.description);
+        ImGui::PopTextWrapPos();
+    }
+}
+
 // Build + emit the tooltip body for a warm record (type-specific). `code` is the
 // chip's chat code, used only to fetch upgrade (rune/sigil) records for items.
 void TooltipWarm(const DecoderRecord& rec, const std::string& code)
 {
-    const char* nm = rec.name[0] ? rec.name : "(unnamed)";
-
-    // Items get a rarity-coloured header so the tooltip matches the chip colour.
-    if (rec.linkType == 0x02) {
-        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(ChipColorForItemRarity(rec.rarity)),
-                           "%s", nm);
-    } else {
-        ImGui::TextUnformatted(nm);
+    // Items get the full rarity-coloured equipment panel.
+    if (rec.linkType == PieUI::ChatLinks::LINK_ITEM) {
+        EmitItemPanel(rec, code);
+        return;
     }
 
+    const char* nm = rec.name[0] ? rec.name : "(unnamed)";
+    ImGui::TextUnformatted(nm);
+
     switch (rec.linkType) {
-        case 0x02: {  // item
-            // v3+: pre-formatted stat / meta lines (Defense, Weapon Strength,
-            // attributes, infusion slots, weight, required level). Empty against
-            // an older DR, so the tooltip is simply unchanged there.
-            const int nFacts = rec.factCount > 16 ? 16 : rec.factCount;
-            if (nFacts > 0) {
-                ImGui::Separator();
-                EmitFacts(rec);
-            }
-            // Vendor value + bind/trade flags. DR deliberately keeps these OUT of
-            // facts[], so there is no duplication with the stat lines above.
-            ImGui::Separator();
-            std::string v = "Vendor: ";
-            AppendCoin(v, rec.vendorValue);
-            ImGui::TextUnformatted(v.c_str());
-            if (const char* b = BoundText(rec.bound)) ImGui::TextUnformatted(b);
-            ImGui::TextUnformatted(rec.tradeable ? "Tradeable on the Trading Post"
-                                                 : "Not tradeable");
-            if (rec.noSell) ImGui::TextUnformatted("Cannot be sold to a vendor");
-
-            // Rune / sigil set bonuses live on the UPGRADE item's own record (DR
-            // keeps records flat), so decode the chip's upgrade ids and resolve
-            // each as a normal item link. Degrades cleanly: a not-yet-warm upgrade
-            // is skipped and fills on a later frame via the RESOLVED event.
-            PieUI::ChatLinks::DecodedItemLink di;
-            if (PieUI::ChatLinks::DecodeItem(code, di)) {
-                const uint32_t ups[2] = { di.upgrade1_id, di.upgrade2_id };
-                bool header = false;
-                for (uint32_t uid : ups) {
-                    if (uid == 0) continue;
-                    DecoderRecord up{};
-                    if (Magpie::Decoder::Resolve(PieUI::ChatLinks::LINK_ITEM, uid, nullptr, up)) {
-                        if (!header) {
-                            ImGui::Separator();
-                            ImGui::TextUnformatted("Upgrades:");
-                            header = true;
-                        }
-                        if (up.name[0]) ImGui::TextUnformatted(up.name);
-                        EmitFacts(up);
-                    }
-                }
-            }
-
-            // Flavour text reads best at the very foot of the tooltip.
-            if (rec.description[0]) {
-                ImGui::Separator();
-                ImGui::PushTextWrapPos(ImGui::GetFontSize() * 24.0f);
-                ImGui::TextUnformatted(rec.description);
-                ImGui::PopTextWrapPos();
-            }
-            break;
-        }
         case 0x06: {  // skill
             if (rec.description[0]) {
                 ImGui::Separator();
@@ -238,6 +248,37 @@ void TooltipWarm(const DecoderRecord& rec, const std::string& code)
                 std::string m = "Map: ";
                 m += rec.mapName;
                 ImGui::TextUnformatted(m.c_str());
+            }
+            break;
+        }
+        case PieUI::ChatLinks::LINK_RECIPE: {  // 0x09 recipe (DR schemaVersion >= 4)
+            // name[] above already reads "Recipe: <output> [(Rarity)]". The
+            // recipe-specific data — ingredient/required-rating facts and the
+            // overloaded vendorValue output id — only exists on a v4+ record, so
+            // gate it on the version that introduced recipes (older DRs never
+            // resolve 0x09, but this keeps us defensive).
+            if (rec.schemaVersion < 4u) break;
+
+            // facts[] = one pre-formatted line per ingredient, then guild
+            // ingredients, then "Required Rating: N" (all icon-less).
+            if (rec.factCount > 0) {
+                ImGui::Separator();
+                EmitFacts(rec);
+            }
+
+            // Second panel: vendorValue is OVERLOADED for recipe links to hold
+            // the OUTPUT item's id (NOT a copper value). Resolve it as a normal
+            // item link and render its full equipment tooltip, mirroring the
+            // game's native two-panel recipe view. Degrades cleanly: a not-yet-
+            // warm output fills on a later frame via the RESOLVED event.
+            if (rec.vendorValue > 0) {
+                DecoderRecord out{};
+                if (Magpie::Decoder::Resolve(PieUI::ChatLinks::LINK_ITEM,
+                                             (uint32_t)rec.vendorValue, nullptr, out)
+                    && out.name[0]) {
+                    ImGui::Separator();
+                    EmitItemPanel(out, std::string());  // no chip code -> no upgrade decode
+                }
             }
             break;
         }

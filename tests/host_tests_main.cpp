@@ -196,13 +196,13 @@ static void test_create_after_fromjson_has_unique_id()
 
 // ── Decoder Ring ABI header tests ──────────────────────────────────────────────
 
-static void test_decoder_header_is_v3()
+static void test_decoder_header_is_v4()
 {
     // Pin the vendored ABI header to the current Decoder Ring release. If DR
     // ships a new header and we forget to re-vendor, this fails loudly. (The
     // runtime guard in DecoderClient accepts >= MIN_SUPPORTED for forward-compat;
     // this is the separate "is the header current" check.)
-    CHECK(DECODER_RING_API_VERSION == 3u);
+    CHECK(DECODER_RING_API_VERSION == 4u);
 }
 
 // ── ChatLinks codec tests ─────────────────────────────────────────────────────
@@ -803,7 +803,7 @@ int main()
     test_create_after_fromjson_has_unique_id();
 
     // Decoder Ring ABI header tests
-    test_decoder_header_is_v3();
+    test_decoder_header_is_v4();
 
     // ChatLinks codec tests
     test_codec_decode_item_extracts_upgrades();

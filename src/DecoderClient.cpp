@@ -33,9 +33,10 @@ namespace {
 AddonAPI_t* APIDefs = nullptr;
 
 // Lowest Decoder Ring ABI we still understand. DR's contract is additive and
-// layout-stable across bumps (v2 and v3 share an identical struct layout — v3
-// only gives existing description[]/facts[] new meaning for items), so we accept
-// any service at-or-above this minimum and read only the fields we know,
+// layout-stable across bumps (v2, v3 and v4 share an identical struct layout —
+// v3 gave existing description[]/facts[] new meaning for items, v4 added recipe
+// links reusing those same fields), so we accept any service at-or-above this
+// minimum and read only the fields we know,
 // treating empty fields as "absent". This keeps Magpie working across future
 // additive DR releases instead of going dark the moment apiVersion ticks up.
 // RAISE THIS (and re-vendor the header) only if DR announces a LAYOUT-breaking

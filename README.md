@@ -11,6 +11,7 @@ If an LLM creating software upsets you, then perhaps this repo isn't for you. Mo
 ## Screenshots
 ![Test Note](screenshots/test_note.png)
 ![Edit Mode](screenshots/edit_mode.png)
+![Memo showing PSNA agent locations](screenshots/psna.png)
 ![Attack!](screenshots/attack.jpg)
 
 ## Features

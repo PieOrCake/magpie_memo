@@ -13,6 +13,7 @@
 #include "Theme.h"
 #include "NotesWindow.h"
 #include "DecoderClient.h"
+#include "PieUiClient.h"
 #include "IconCache.h"
 #include "EmbeddedIcon.h"   // MAGPIE_ICON[] + MAGPIE_ICON_size (generated from icon.png)
 
@@ -145,6 +146,9 @@ void AddonLoad(AddonAPI_t* aApi) {
     // Decoder Ring consumer client (optional provider; lifetime-contract safe).
     Magpie::Decoder::Init(APIDefs);
 
+    // Pie UI consumer client (optional provider; latched presence, no-op when absent).
+    Magpie::PieUi::Init(APIDefs);
+
     // Load persisted settings (e.g. the quick-access toggle), then register the
     // quick-access icon from the embedded icon.png (same method as Alter Ego).
     LoadSettings();
@@ -158,6 +162,9 @@ void AddonLoad(AddonAPI_t* aApi) {
 void AddonUnload() {
     // Drop Decoder Ring subscriptions + cache before APIDefs goes away.
     Magpie::Decoder::Shutdown();
+
+    // Unsubscribe Pie UI's READY handler before APIDefs goes away.
+    Magpie::PieUi::Shutdown();
 
     // Mark the icon cache dead so a late texture-load callback can't touch torn-down state.
     Magpie::Icons::Shutdown();

@@ -58,6 +58,7 @@ if(NOT MAGPIE_HOST_TESTS)
         src/ChipTextEdit.cpp
         src/ChipRich.cpp
         src/DecoderClient.cpp
+        src/PieUiClient.cpp
         src/IconUrl.cpp
         src/IconCache.cpp
         ${IMGUI_SOURCES}

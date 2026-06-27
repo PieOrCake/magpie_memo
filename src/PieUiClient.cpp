@@ -1,18 +1,23 @@
 // ============================================================================
 // PieUiClient — the ONLY place that talks to the optional Pie UI provider.
-// Magpie is here the CONSUMER of Pie UI's "open world map" service, which is
-// fire-and-forget (no data returned), so this client is much simpler than
-// DecoderClient: a single latched presence flag, no cache, no unloading
-// handler.
+// Magpie is here the CONSUMER of Pie UI's "perform a chat link's native action"
+// service, which is fire-and-forget (no data returned), so this client is much
+// simpler than DecoderClient: a single latched presence flag, no cache, no
+// unloading handler.
 //
-// Contract (Pie UI ships its side):
-//   * EV_PIE_UI_PING   — we raise this on load to probe for Pie UI.
-//   * EV_PIE_UI_READY  — Pie UI raises this on its own load and in reply to a
-//                        ping; we subscribe and latch "present".
-//   * EV_PIEUI_OPEN_MAP— we raise this with a "[&...]" chat code; Pie UI decodes
-//                        the PoI id and opens + pans the map. Strictly
-//                        validated on Pie UI's side; a bad/non-waypoint link is
-//                        ignored silently. No reply.
+// Contract (Pie UI ships its side; see its public PieUiAPI.h):
+//   * EV_PIE_UI_PING      — we raise this on load to probe for Pie UI.
+//   * EV_PIE_UI_READY     — Pie UI raises this on its own load and in reply to a
+//                           ping; we subscribe and latch "present".
+//   * EV_PIEUI_OPEN_CHATLINK — we raise this with a "[&...]" chat code; Pie UI
+//                           decodes the type byte and performs the link's native
+//                           action on the game thread (waypoint -> open+pan map;
+//                           wardrobe template -> wardrobe window; build -> build
+//                           window; item/skin/outfit -> wardrobe preview).
+//                           Strictly validated on Pie UI's side; a bad / unsupported
+//                           / non-terminated link is ignored silently. No reply.
+//                           (Supersedes the old map-only EV_PIEUI_OPEN_MAP, still
+//                           accepted by Pie UI as a back-compat alias.)
 //
 // The READY handler may fire off the render thread, so presence is a
 // std::atomic<bool>. Pie UI has no "unloading" event; a stale latch can at worst
@@ -32,7 +37,7 @@ namespace {
 AddonAPI_t* APIDefs = nullptr;
 
 // Pie UI event identifiers (our copy of the contract; Pie UI is never modified).
-constexpr const char* EV_PIEUI_OPEN_MAP = "EV_PIEUI_OPEN_MAP";  // we raise
+constexpr const char* EV_PIEUI_OPEN_CHATLINK = "EV_PIEUI_OPEN_CHATLINK";  // we raise
 constexpr const char* EV_PIE_UI_PING    = "EV_PIE_UI_PING";     // we raise
 constexpr const char* EV_PIE_UI_READY   = "EV_PIE_UI_READY";    // we subscribe
 
@@ -71,10 +76,10 @@ bool Present() {
     return s_present.load();
 }
 
-void OpenMap(const std::string& chatCode) {
+void OpenChatLink(const std::string& chatCode) {
     if (!APIDefs || !APIDefs->Events_Raise || chatCode.empty()) return;
     // Nexus delivers synchronously, so the c_str() pointer is valid for the raise.
-    APIDefs->Events_Raise(EV_PIEUI_OPEN_MAP, (void*)chatCode.c_str());
+    APIDefs->Events_Raise(EV_PIEUI_OPEN_CHATLINK, (void*)chatCode.c_str());
 }
 
 }} // namespace Magpie::PieUi

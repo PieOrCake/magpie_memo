@@ -25,7 +25,7 @@
 #define V_MAJOR    0
 #define V_MINOR    9
 #define V_BUILD    3
-#define V_REVISION 0
+#define V_REVISION 1
 
 // ── Globals ───────────────────────────────────────────────────────────────
 AddonAPI_t*      APIDefs         = nullptr;

@@ -24,7 +24,7 @@
 #include "ChipResolver.h"            // Magpie::ResolveChip (structural label)
 #include "ChipColor.h"               // Magpie::ChipColor (native GW2 chip colours)
 #include "DecoderClient.h"           // Magpie::Decoder::Present / Resolve
-#include "PieUiClient.h"             // Magpie::PieUi::Present / OpenMap
+#include "PieUiClient.h"             // Magpie::PieUi::Present / OpenChatLink
 #include "DecoderRingApi.h"          // DecoderRecord + enums (rarity)
 #include "IconCache.h"               // Magpie::Icons::RequestUrl / Get
 #include "chat/ChatLinks.h"          // SegmentLine -> (linkType, id)
@@ -48,6 +48,22 @@ bool LinkKey(const std::string& code, uint8_t& linkType, uint32_t& id)
         }
     }
     return false;
+}
+
+// Map a chip link type to the menu label for handing it to Pie UI's generic
+// "perform native action" event. Returns "" for types Pie UI does not act on,
+// so the caller shows no Pie UI affordance for them.
+const char* PieUiActionLabel(uint8_t linkType)
+{
+    switch (linkType) {
+        case PieUI::ChatLinks::LINK_MAP:           return "Open map in Pie UI";
+        case PieUI::ChatLinks::LINK_WARDROBE_TMPL: return "Open wardrobe template in Pie UI";
+        case PieUI::ChatLinks::LINK_BUILD:         return "Open build in Pie UI";
+        case PieUI::ChatLinks::LINK_ITEM:
+        case PieUI::ChatLinks::LINK_SKIN:
+        case PieUI::ChatLinks::LINK_OUTFIT:        return "Preview in Pie UI";
+        default:                                   return "";
+    }
 }
 
 // Resolve the chip to its display state for this frame.
@@ -357,15 +373,17 @@ float DrawRichChip(ImDrawList* dl, ImFont* font, float fontSize, const ImVec2& p
     char pid[32];
     snprintf(pid, sizeof pid, "chip_ctx_%d", uid);
 
-    // Waypoint chips (LINK_MAP, 0x04) can ask Pie UI to open + pan the world map.
-    // Offered only when Pie UI is present (so an absent Pie UI never shows a dead
-    // affordance). Works in BOTH warm and cold chip states: OpenMap hands Pie UI
-    // the raw chat code, which Pie UI decodes itself — no Decoder Ring required.
-    uint8_t wpType = 0; uint32_t wpId = 0;
-    const bool offerMap =
-        LinkKey(code, wpType, wpId) &&
-        wpType == PieUI::ChatLinks::LINK_MAP &&
-        Magpie::PieUi::Present();
+    // Any Pie-UI-supported chip (waypoint, wardrobe/build template, item/skin/
+    // outfit) can ask Pie UI to perform the link's native action. Offered only
+    // when Pie UI is present (so an absent Pie UI never shows a dead affordance)
+    // and only for types Pie UI acts on (PieUiActionLabel returns "" otherwise).
+    // Works in BOTH warm and cold chip states: OpenChatLink hands Pie UI the raw
+    // chat code, which Pie UI decodes itself — no Decoder Ring required.
+    uint8_t pieType = 0; uint32_t pieId = 0;
+    const char* pieLabel =
+        (LinkKey(code, pieType, pieId) && Magpie::PieUi::Present())
+            ? PieUiActionLabel(pieType) : "";
+    const bool offerPie = pieLabel[0] != '\0';
 
     const bool hovering = ImGui::IsMouseHoveringRect(rMin, rMax);
     if (hovering) {
@@ -380,16 +398,16 @@ float DrawRichChip(ImDrawList* dl, ImFont* font, float fontSize, const ImVec2& p
                 ImGui::TextUnformatted("Decoder Ring not loaded.");
                 ImGui::TextUnformatted("Right-click to copy the code or open the wiki.");
             }
-            // Discoverability for the Pie UI map action (waypoints, Pie UI present).
-            if (offerMap) {
+            // Discoverability for the Pie UI action (supported types, Pie UI present).
+            if (offerPie) {
                 ImGui::Separator();
-                ImGui::TextUnformatted("Left-click: open map in Pie UI");
+                ImGui::Text("Left-click: %s", pieLabel);
             }
             ImGui::EndTooltip();
         }
-        // Left-click a waypoint -> ask Pie UI to open + pan the map.
-        if (offerMap && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-            Magpie::PieUi::OpenMap(code);
+        // Left-click a supported chip -> ask Pie UI to perform its native action.
+        if (offerPie && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            Magpie::PieUi::OpenChatLink(code);
         }
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
             ImGui::OpenPopup(pid);
@@ -401,7 +419,7 @@ float DrawRichChip(ImDrawList* dl, ImFont* font, float fontSize, const ImVec2& p
     if (ImGui::BeginPopup(pid)) {
         if (ImGui::MenuItem("Copy chat code")) ImGui::SetClipboardText(code.c_str());
         if (ImGui::MenuItem("Open in wiki"))   OpenWiki(code);
-        if (offerMap && ImGui::MenuItem("Open map in Pie UI")) Magpie::PieUi::OpenMap(code);
+        if (offerPie && ImGui::MenuItem(pieLabel)) Magpie::PieUi::OpenChatLink(code);
         ImGui::EndPopup();
     }
 
